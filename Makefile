@@ -77,5 +77,6 @@ clean:
 	@echo "Cleanup"
 	-dsss clean
 	-rm -rf $(TARGET_FOLDER)/
-	-rm -f  ssh-tunnels-gtk libDD-unittests.a ssh-tunnels-cli test_DD-unittests
-	-rm -rf dsss_imports 
+	-rm -f  $(BUILD_NAME)-gtk $(BUILD_NAME)-cli libDD-unittests.a test_DD-unittests
+	-rm -rf dsss_imports dsss.last
+	-rm -rf debian/files debian/$(BUILD_NAME)
