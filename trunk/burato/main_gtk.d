@@ -1,5 +1,42 @@
+/*
+ * main_gtk.d
+ *
+ * Copyright (C) 2008 Emmanuel Rodriguez
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
 module burato.man_gtk;
 
+/**
+ * This module provides a program with a graphical frontend that can be used to
+ * start new SSH tunnels that are each backed by a corresponding iptable rule.
+ *
+ * This program is expected to be with a graphical desktop and lies in the
+ * system tray once the tray icon is activated the main window will be visible.
+ *
+ * To stop the program simply right click on the tray icon and select "quit".
+ * This will cause the program to gracefully close all tunnels and to remove the
+ * corresponding iptable rules.
+ *
+ * If an individual tunnel dies or is killed the program should detect it an
+ * remove the corresponding iptable rule.
+ *
+ * NOTE: If the program is killed with the signal "KILL" (9) then no clean will
+ *       be made. This means that the iptable rules might still be available.
+ */
 
 private import std.stdio;
 private import std.string;

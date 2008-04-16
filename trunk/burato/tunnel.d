@@ -1,12 +1,34 @@
+/*
+ * tunnel.d
+ *
+ * Copyright (C) 2008 Emmanuel Rodriguez
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+module burato.tunnel;
+
 /**
- * SSH tunnel with a custom iptables rule.
+ * This module provides the class Tunnel which is used to wrap an SSH tunnel
+ * with a custom iptable rule.
  *
  * This class implements an SSH tunnel that's backed by an iptables rule used to
  * redirect the connections to the target host through it's usual port through
  * the local tunnel by using the local port.
  */
-module burato.tunnel;
-
+ 
 private import std.stdio: writefln;
 private import std.string: format;
 private import std.process: execvp, system;
@@ -18,11 +40,7 @@ private import std.c.linux.linux;
 
 private import burato.signal: signalsUnblock;
 private import burato.fork: forkTask, pid_t;
-private import burato.error:
-	FormattedException,
-	ErrnoException
-;
-
+private import burato.error: FormattedException, ErrnoException;
 private import burato.ssh_config: getNetworkAddress;
 private import burato.network: getLocalAddress, NetworkAddress;
 
