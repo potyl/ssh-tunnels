@@ -78,7 +78,6 @@ private const int [] SIGNALS = [
 	SIGIO,
 	SIGPWR,
 	SIGSYS,
-	SIGUNUSED,
 ];
 
 
