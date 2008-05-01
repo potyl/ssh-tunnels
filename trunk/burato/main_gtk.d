@@ -81,7 +81,9 @@ private import gtk.TreeView;
 private import gtk.TreeViewColumn;
 private import gtk.CellRendererText;
 private import gtk.TreeIter;
+private import gtk.TreePath;
 
+private import gdk.Keymap;
 private import gdk.Event;
 private import gdk.Rectangle;
 private import gobject.Value;
@@ -192,8 +194,7 @@ private class TunnelsListStore : ListStore {
 	
 	
 	/**
-	 * Removes the tunnel with the given PID from the store and returns the tunnel
-	 * removed. If there's no tunnel undef will be returned.
+	 * Removes the tunnel with the given PID from the store.
 	 */
 	void closeTunnel (pid_t pid) {
 		
@@ -208,6 +209,26 @@ private class TunnelsListStore : ListStore {
 		
 		runUninterrupted(&task, SIGNALS);
 		writefln("Tunnel with PID %d finish", pid);
+	}
+	
+	
+	/**
+	 * Removes the tunnel designated by the given TreeIter from the store.
+	 */
+	void closeTunnel (TreeIter iter) {
+		
+		TreePath path = this.getPath(iter);
+		writefln("My path %s", path.toString());
+		
+		foreach (pid_t pid, Item item; items) {
+			TreePath itemPath = this.getPath(item.iter);
+			writefln("THE path %s", itemPath.toString());
+			
+			if (path.compare(itemPath) == 0) {
+				this.closeTunnel(pid);
+				return;
+			}
+		}
 	}
 	
 	
@@ -247,6 +268,7 @@ class Application {
 	private const SpinButton portField;
 	private const Entry targetField;
 	private const AboutDialog aboutDialog;
+	private const TreeView treeView;
 	
 	private const Menu menu;
 	
@@ -280,6 +302,7 @@ class Application {
 		this.portField = this.getGladeWidget!(SpinButton)("port");
 		this.targetField = this.getGladeWidget!(Entry)("target");
 		this.menu = this.getGladeWidget!(Menu)("menu");
+		this.treeView = this.getGladeWidget!(TreeView)("treeview");
 		
 		this.aboutDialog = this.getGladeWidget!(AboutDialog)("dialog-about");
 		
@@ -323,8 +346,22 @@ class Application {
 		// Complete the Tunnel's TreeView widget and it's store
 		this.setupTunnelsView();
 	}
+
 	
-	
+	private gboolean onDeleteTunnel (GdkEventKey *event, Widget widget) {
+		
+		if (Keymap.gdkKeyvalFromName("Delete") != event.keyval) {
+			return false;
+		}
+		
+		TreeIter iter = this.treeView.getSelectedIter();
+		if (iter !is null) {
+			this.store.closeTunnel(iter);
+		}
+		return true;
+	}	
+
+
 	/**
 	 * Callback called the the about dialog should be displayed.
 	 */
@@ -544,10 +581,9 @@ class Application {
 	private void setupTunnelsView () {
 		
 		// Set the tree view
-		TreeView treeView = this.getGladeWidget!(TreeView)("treeview");
-		treeView.setModel(this.store);
-		treeView.setHeadersClickable(true);
-		treeView.setRulesHint(true);
+		this.treeView.setModel(this.store);
+		this.treeView.setHeadersClickable(true);
+		this.treeView.setRulesHint(true);
 		
 		string [] titles = [
 			"Hop",
@@ -571,6 +607,8 @@ class Application {
 
 			treeView.appendColumn(column);
 		}
+		
+		treeView.addOnKeyRelease(&onDeleteTunnel);
 	}
 	
 	
