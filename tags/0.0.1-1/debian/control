@@ -1,0 +1,24 @@
+Source: ssh-tunnels
+Section: net
+Priority: optional
+Maintainer: Emmanuel Rodriguez <emmanuel.rodriguez@gmail.com>
+Build-Depends: debhelper (>= 4.0.0)
+Standards-Version: 3.6.1
+
+Package: ssh-tunnels
+Architecture: any
+Depends: openssh-client,
+ iptables, 
+ sudo
+Description: GUI for creating SSH tunnels backed with iptable rules.
+ This program provides a simple graphical front-end to create transparent SSH
+ tunnels that are backed up with iptable rules. This gives the illusion of
+ creating real access to remote end points eventhough the actual connections
+ are tunneled through SSH.
+ .
+ The GUI is provided in the form of a system tray icon and should be able to
+ work with all modern desktops that provide a system tray such as GNOME, KDE,
+ XFCE or ROX.
+ .
+ Each SSH tunnel is paired with a corresponding iptable rule which makes the
+ target end point directly accessible as if no tunneling was used.
