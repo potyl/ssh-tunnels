@@ -1,5 +1,5 @@
 BUILD_NAME=$(shell cat debian/control | grep 'Package' | sed 's/Package: //')
-BUILD_VERSION=$(shell cat debian/changelog | head -n 1 | perl -pe 's/^.*\((.*)\).*\Z/\1/')
+BUILD_VERSION=$(shell cat CHANGELOG | head -n 1)
 
 SVN_REPO=$(shell svn info | grep -E '^URL: ' | cut -f2 -d' ' | sed -e 's%/trunk%%')
 
@@ -19,7 +19,6 @@ DPKG=
 info:
 	@echo "BUILD_NAME    = $(BUILD_NAME)"
 	@echo "BUILD_VERSION = $(BUILD_VERSION)"
-	@echo "BUILD_NAME    = $(BUILD_NAME)"
 	@echo "SVN_REPO      = $(SVN_REPO)"
 
 
@@ -70,6 +69,14 @@ tag:
 	# Remove existing tag
 	-svn rm -m "Retagging version $(BUILD_VERSION)" $(SVN_REPO)/tags/$(BUILD_VERSION)
 	svn cp -m "Tag for version $(BUILD_VERSION)" $(SVN_REPO)/trunk $(SVN_REPO)/tags/$(BUILD_VERSION)
+
+
+.PHONY: dist
+dist:
+	@echo "Creating distribution file (.tar.gz)"
+	mkdir -p $(TARGET_FOLDER)/dist/
+	( cd $(TARGET_FOLDER)/dist/; svn export $(SVN_REPO)/trunk $(BUILD_NAME)-$(BUILD_VERSION) )
+	tar zcf $(TARGET_FOLDER)/dist/$(BUILD_NAME)-$(BUILD_VERSION).tar.gz -C $(TARGET_FOLDER)/dist/ $(BUILD_NAME)-$(BUILD_VERSION)
 
 
 .PHONY: clean
