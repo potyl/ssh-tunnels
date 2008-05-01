@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SSH Tunnels
+GenericName=Simple front-end for creating SSH Tunnels
+Comment=Create SSH Tunnels backed by iptable rules
+Exec=%BUILD_NAME%-gtk
+Icon=%PREFIX%/share/%BUILD_NAME%/%BUILD_NAME%.png
+Categories=Network;RemoteAccess;TrayIcon;
+Terminal=false
