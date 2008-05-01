@@ -77,6 +77,8 @@ clean:
 	@echo "Cleanup"
 	-dsss clean
 	-rm -rf $(TARGET_FOLDER)/
-	-rm -f  $(BUILD_NAME)-gtk $(BUILD_NAME)-cli libDD-unittests.a test_DD-unittests
+	-rm -f  $(BUILD_NAME)-gtk
+	-rm -f  libDD-unittests.a libDG-unittests.a
+	-rm -f  test_DD-unittests test_DG-unittests
 	-rm -rf dsss_imports dsss.last
 	-rm -rf debian/files debian/$(BUILD_NAME)
