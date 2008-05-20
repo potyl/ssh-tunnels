@@ -63,7 +63,7 @@ private import std.c.linux.linux:
 private import std.c.stdlib: getenv;
 
 
-private import gtk.GtkD;
+private import gtk.Main;
 private import gtk.Window;
 private import gtk.StatusIcon;
 private import gtk.Widget;
@@ -635,8 +635,8 @@ class Application {
 			tunnel.disconnect();
 		}
 		
-		writefln("Calling GtkD.mainQuit()");
-		GtkD.mainQuit();
+		writefln("Calling Main.quit()");
+		Main.quit();
 	}
 }
 
@@ -645,7 +645,7 @@ class Application {
  * Main entry point of the program.
  */
 int main (string [] args) {
-	GtkD.init(args);
+	Main.init(args);
 
 	// Resolve the application's path
 	resolveResourcePath(args[0]);
@@ -663,7 +663,7 @@ int main (string [] args) {
 	signal(SIGCHLD, &monitorTunnelsSighandler);
 
 	// Go into the main loop
-	GtkD.main();
+	Main.run();
 	
 	writefln("GTK main loop is now over");
 	
