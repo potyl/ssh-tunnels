@@ -83,8 +83,10 @@ private const int [] SIGNALS = [
 
 
 /**
- * This Exception class enables the message string to be formatted with the same
- * formats as "doFormat".
+ * Representation of an SSH tunnel. A tunnel is backed by an SSH process. For
+ * the moment an tunnel requires a dedicated SSH connection and different
+ * tunnels, even for the same targets, have to be made through different SSH
+ * connections.
  */
 class Tunnel {
 	
@@ -98,7 +100,6 @@ class Tunnel {
 	/**
 	 * Creates a new Tunnel instance. This tunnel is not yet connected, this has
 	 * to be performed through the method "connect".
-	 *
 	 */
 	this(string hop, string localHost, ushort localPort, string targetHost, ushort targetPort) {
 		this.pid = 0;
@@ -112,7 +113,6 @@ class Tunnel {
 	 * Creates a new Tunnel instance. This tunnel is not yet connected, this has
 	 * to be performed through the method "connect". Furthermore, the local port
 	 * and local address to use will be found automatically.
-	 *
 	 */
 	this(string hop, string host, ushort port) {
 		
