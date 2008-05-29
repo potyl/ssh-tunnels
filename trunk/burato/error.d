@@ -78,7 +78,7 @@ private string getError () {
  * Custom wrapper that calls "doFormat", this wrapper is needed in order to
  * forward the call of the "FormattedException" constructor to "doFormat".
  */
-private string my_format(TypeInfo[] arguments, va_list argptr) {
+private string my_format (TypeInfo[] arguments, va_list argptr) {
 
 	string text;
 
