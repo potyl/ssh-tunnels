@@ -26,6 +26,7 @@ module burato.network;
  */
 
 private import std.socket;
+private import std.string: format;
 
 private import burato.error: FormattedException;
 
@@ -44,6 +45,10 @@ public class NetworkAddress {
 	this(string host, ushort port) {
 		this.host = host;
 		this.port = port;
+	}
+	
+	public string toString() {
+		return format("%s(host=%s, port=%d)", super.toString(), this.host, this.port);
 	}
 }
 
