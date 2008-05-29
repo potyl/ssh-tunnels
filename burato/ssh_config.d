@@ -23,8 +23,17 @@ module burato.ssh_config;
 /**
  * This module provides utility functions for parsing an OpenSSH configuration
  * file as described in the man page ssh_config(5). The main purpose of this
- * functions is to extract the hostname and port number that correspond to a
- * given SSH host.
+ * module is to extract the hostname and port number that correspond to a given
+ * SSH host.
+ *
+ * To summarize the ssh_config(5) man page: the OpenSSH configuration parameters
+ * are defined within "Host" sections, this sections can use patterns to match a
+ * given hostname. Futhermore multiple sections can match a given hostname in
+ * this case when an extra section is parsed only new directictives are taken
+ * into account. This way the first directive encoutered has precedence.
+ *
+ * The configuration of a host can spawn over multiple sections and through
+ * multiple configuration files.
  */
 
 private import std.stdio;
@@ -45,26 +54,21 @@ private const ushort SSH_DEFAULT_PORT = 22;
  * asked to connect ot the given host.
  *
  * This function tries to return the values of the configuration directives
- * "HostName" and "Port" that corresponds to a matching "Host" section. The 
- * values are returned in a NetworkAddress because the class will preserve the
- * hostname intact.
- *
- * If the given host can't be matched with a "Host" directive then null will be
- * returned. This shouldn't be a problem as usually the file /etc/ssh/ssh_config
- * includes the default target "Host *" which will match everything. Thus make
- * sure that this function will be eventually called with the default OpenSSH
- * configuration file.
+ * "HostName" and "Port" that corresponds to the given host. The values are
+ * returned in a NetworkAddress because the class will preserve the hostname
+ * intact.
  *
  * Parameters:
- *   host: the hostname where to connect to, expects the same format as OpenSSH,
- *         thus "root@mailserver" is a valid entry.
- *   file: the OpenSSH configuration file to parse.
+ *   host:       the hostname where to connect to, expects the same format as
+ *               OpenSSH, thus "root@mailserver" is a valid entry.
+ *   directives: the OpenSSH default directives that override all other values.
+ *   file:       the OpenSSH configuration file to parse.
  *
  * Returns:
- *   NetworkAddress if a configuration section matches the host otherwise null.
+ *   a NetworkAddress: hostname and port pair.
  * 
  */
-public NetworkAddress getNetworkAddress(string host, string file) {
+public NetworkAddress getNetworkAddress(string host, string [string] directives, string [] files) {
 
 	// Check if a user name was specified in the host name
 	int pos = find(host, '@');
@@ -73,34 +77,42 @@ public NetworkAddress getNetworkAddress(string host, string file) {
 			// The string ends with an '@', there's nothing to do
 			return new NetworkAddress(host, SSH_DEFAULT_PORT);
 		}
-		// Remove the user name
+		// Remove the user name from the host
 		host = host[pos + 1 .. host.length];
 	}
-
-
-	// Scan the configuration file
-	ConfigurationFile config = new ConfigurationFile(file);
-	while (config.hasNext()) {
 	
-		auto directive = config.next();
+	// Make sure that the directives can store data
+	if (directives is null) {
+		string [string] hash;
+		directives = hash;
+	}
 
-		// Look until we match the "Host" directive for the given host
-		if (directive.matches("Host", host)) {
-			
-			// Get the section's directives
-			string [string] directives = getSectionDirectives(config); 
-			
-			// Extract the hostname and the port
-			string hostname = getDirectiveValue(directives, "HostName", host);
-			string portString = getDirectiveValue(directives, "Port", toString(SSH_DEFAULT_PORT));
-			ushort port = atoi(portString);
-			
-			NetworkAddress address = new NetworkAddress(hostname, port);
-			return address;
+
+	// Parse the configuration files
+	foreach (string file; files) {
+		// Scan the configuration file
+		ConfigurationFile config = new ConfigurationFile(file);
+		while (config.hasNextDirective()) {
+		
+			auto directive = config.nextDirective();
+	
+			// Look until we match the "Host" directive for the given host
+			if (directive.matches("Host", host)) {
+				
+				// Get the section's directives
+				directives = config.loadSectionDirectives(directives); 
+			}
 		}
 	}
-	
-	return null;
+writefln("==>Directives for %s:\n%s\n", host, directives);
+
+	// Extract the hostname and the port from the directives
+	string hostname = getDirectiveValue(directives, "HostName", host);
+	string portString = getDirectiveValue(directives, "Port", toString(SSH_DEFAULT_PORT));
+	ushort port = atoi(portString);
+			
+	NetworkAddress address = new NetworkAddress(hostname, port);
+	return address;
 }
 
 
@@ -128,47 +140,27 @@ private string getDirectiveValue(string [string] directives, string name, string
 
 
 /**
- * Returns the OpenSSH configuration directives defined in the current "Host"
- * section.
- *
- * This function is meant to operate within a "Host" section and will read all
- * configuration directives until the end of file or the next "Host" section.
- *
- * This function returs the configuration directives in an hash table where the
- * key is the configuration keyboard and the value the configuration value.
- *
- * Parameters:
- *   config: an instance of ConfigurationFile.
- */
-private string [string] getSectionDirectives (ConfigurationFile config) {
-
-	string [string] directives;
-
-	// Now we're in the good "Host" section, let's find the "HostName" directive
-	while (config.hasNext()) {
-		auto directive = config.next();
-			
-		// Make sure that we don't spawn over another host section
-		if (directive.matches("Host")) {
-			break;
-		}
-		
-		directives[directive.keyword] = directive.value;
-	}
-
-writefln("Section is %s", directives);
-	return directives;
-}
-
-
-/**
  * Wrapper over a configuration file. This class provides a way to iterate over
  * the configuration parameters.
+ *
+ * This class reads the directives one by one with a buffer (for a single 
+ * directive). When a "Host" section is parsed then the current directive (the
+ * "Host" declaration) is put back into the buffer for a latter consumption.
  */
 private class ConfigurationFile {
 	
+	/**
+	 * The file handle of the configuration file being parsed.
+	 */
 	private FILE *handle;
+
+	/**
+	 * This buffer is used to store a directive that was parsed ahead and that
+	 * will need to be reparsed latter. This happens usually at the end of a
+	 * "Host" section.
+	 */
 	private ConfigurationDirective directive;
+
 	
 	this(string file) {
 		this.handle = fopen(std.string.toStringz(file), "r");
@@ -180,7 +172,7 @@ private class ConfigurationFile {
 	}
 	
 	private void close() {
-		if (! this.handle) {
+		if (this.handle is null) {
 			return;
 		}
 
@@ -192,7 +184,7 @@ private class ConfigurationFile {
 	 * Returns true if a configuration directive can be pulled from the
 	 * configuration file.
 	 */
-	bool hasNext() {
+	private bool hasNextDirective() {
 		
 		if (this.directive) {
 			return true;
@@ -222,10 +214,57 @@ private class ConfigurationFile {
 	/**
 	 * Returns the next configuration directive available.
 	 */
-	ConfigurationDirective next() {
+	private ConfigurationDirective nextDirective() {
 		auto tmp = this.directive;
 		this.directive = null;
 		return tmp;
+	}
+
+
+	/**
+	 * Loads the OpenSSH configuration directives defined in the current "Host"
+	 * section.
+	 *
+	 * This function is meant to operate within a single "Host" section and will
+	 * read all configuration directives until the end of file or the next "Host"
+	 * section.
+	 *
+	 * This function returs the configuration directives in an hash table where the
+	 * key is the configuration keyboard and the value the configuration value.
+	 *
+	 * Parameters:
+	 *   directives: the directives loaded so far.
+	 *
+	 * Returns:
+	 *   the directives loaded.
+	 */
+	string [string] loadSectionDirectives (string [string] directives) {
+	
+	
+		// Now we're in the good "Host" section, let's find the "HostName" directive
+		while (this.hasNextDirective()) {
+			auto directive = this.nextDirective();
+				
+			// Make sure that we don't spawn over another host section
+			if (directive.matches("Host")) {
+				// Make sure to remember this directive, in order to resume the loading
+				// at the previous place
+				this.directive = directive;
+				break;
+			}
+writefln("parsed %s=%s", directive.keyword, directive.value);			
+			
+			// Insert the directive only if it's the first time that it's seen
+			string *pointer = (directive.keyword in directives);
+			if (pointer is null) {
+				directives[directive.keyword] = directive.value;
+writefln("==>Adding directives %s = %s", directive.keyword, directive.value);
+			}
+		}
+
+
+	writefln("Section is %s", directives);
+		return directives;
 	}
 }
 
@@ -276,7 +315,7 @@ private class ConfigurationDirective {
 
 
 	string toString() {
-		return format("%s = \"%s\"", this.keyword, this.value);
+		return format("%s(keyword=%s, value=%s)", super.toString(), this.keyword, this.value);
 	}
 }
 
@@ -354,4 +393,40 @@ private ConfigurationDirective getConfigurationDirective (string text) {
 	string value = text[start .. end];
 	
 	return new ConfigurationDirective(keyword, value);
+}
+
+
+
+//------------------------------------
+
+
+
+/**
+ * Returns the NetworkAddress (hostname, port) to use when OpenSSH is presented
+ * asked to connect ot the given host.
+ *
+ * This function tries to return the values of the configuration directives
+ * "HostName" and "Port" that corresponds to a matching "Host" section. The 
+ * values are returned in a NetworkAddress because the class will preserve the
+ * hostname intact.
+ *
+ * If the given host can't be matched with a "Host" directive then null will be
+ * returned. This shouldn't be a problem as usually the file /etc/ssh/ssh_config
+ * includes the default target "Host *" which will match everything. Thus make
+ * sure that this function will be eventually called with the default OpenSSH
+ * configuration file.
+ *
+ * Parameters:
+ *   host: the hostname where to connect to, expects the same format as OpenSSH,
+ *         thus "root@mailserver" is a valid entry.
+ *   file: the OpenSSH configuration file to parse.
+ *
+ * Returns:
+ *   NetworkAddress if a configuration section matches the host otherwise null.
+ * @DEPRECATED
+ */
+public NetworkAddress getNetworkAddress(string host, string file) {
+	string [string] directives;
+	string [] files = [file];
+	return getNetworkAddress(host, directives, files);
 }
