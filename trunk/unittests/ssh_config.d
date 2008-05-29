@@ -71,9 +71,12 @@ unittest {
 	test("ntp-public", "ntp-public");
 	test("uber", "uber");
 
-
-	NetworkAddress address = getNetworkAddress("missing", "unittests/config");
-	assert(address is null);
+	// Not present in the file
+	test("missing", "missing");
+//
+//	NetworkAddress address = getNetworkAddress("missing", "unittests/config");
+//writefln("==ADDRESS = %s", address);
+//	assert(address is null);
 }
 
 
