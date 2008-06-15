@@ -619,7 +619,7 @@ class Application {
 		
 		// NOTE Make sure that we deregister our SIGCHLD reaper. This has to be done
 		//      for two reasons: 
-		//      1- We are going to kill all tunnels so no need to catch the sginals
+		//      1- We are going to kill all tunnels so no need to catch the signals
 		//      2- The tunnels are closed using system and the signal handler seems
 		//         to interfere with it, the program hangs there.
 		//
