@@ -40,7 +40,6 @@ module burato.main_cli;
  */
 
 private import std.stdio;
-private import std.string: atoi;
 private import std.process: waitpid;
 private import std.string;
 
@@ -74,11 +73,39 @@ Tunnel [pid_t] TUNNELS;
 int main (string [] args) {
 
 	// Get the command line parameters
-	if (args.length <= 3) {
-		writefln("Usage: hop port host...");
+	if (args.length <= 2) {
+		writefln("Usage: hop port:host...");
 		return 1;
 	}
 	string hop = args[1];
+writefln("args: %d", args.length);	
+	NetworkAddress [] addresses;// = new NetworkAddress[args.length - 2];
+	for (size_t i = 2; i < args.length; ++i) {
+		string arg = args[i];
+		string [] parts = split(arg, ":");
+		
+		if (parts.length != 2) {
+			writefln("Ignoring argument %d ('%s') because it has a bad syntax.", i, arg);
+			continue;
+		}
+		
+		writefln("arg %d %s", i, arg);
+		
+		string host = parts[0];
+		ushort port = cast(ushort) atoi(parts[1]);
+
+		addresses.length = addresses.length + 1;
+		addresses[addresses.length - 1] = new NetworkAddress(host, port);
+	}
+	
+	
+	if (addresses.length == 0) {
+		writefln("Couldn't parse a single host:port pair.");
+		return 1;
+	}
+	
+	return 0;
+	
 	ushort port = cast(ushort) atoi(args[2]);
 	string [] hosts = args[3 .. args.length];
 	
@@ -104,6 +131,7 @@ int main (string [] args) {
 
 /**
  * Creates the tunnels to the given hosts/port by using the given hop.
+ * @deprecated use createTunnels (string hop, NetworkAddress [] addresses, int [] signals)
  */
 private void createTunnels (string hop, ushort port, string [] hosts, int [] signals) {
 
@@ -125,6 +153,23 @@ private void createTunnels (string hop, ushort port, string [] hosts, int [] sig
 		};
 		runUninterrupted(&openTunnel, signals);
 	}
+}
+
+
+/**
+ * Creates the tunnels to the given hosts/port by using the given hop.
+ */
+private void createTunnels (string hop, NetworkAddress [] addresses, int [] signals) {
+
+	// Open a single tunnel through the same hop
+	Tunnel tunnel = new Tunnel(hop, addresses);
+
+	// Open the tunnel, make sure to keep it in order to close it latter
+	void openTunnel() {
+		pid_t pid = tunnel.connect();
+		TUNNELS[pid] = tunnel;
+	};
+	runUninterrupted(&openTunnel, signals);
 }
 
 
