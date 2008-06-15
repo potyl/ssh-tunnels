@@ -1,5 +1,5 @@
 /*
- * ssh_config.d
+ * ssh/config.d - OpenSSH configuration parser.
  *
  * Copyright (C) 2008 Emmanuel Rodriguez
  * 
@@ -18,7 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-module burato.ssh_config;
+module burato.ssh.config;
 
 /**
  * This module provides utility functions for parsing an OpenSSH configuration
