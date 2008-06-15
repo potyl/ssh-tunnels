@@ -1,5 +1,5 @@
 /*
- * network.d
+ * network.d - Network utilities.
  *
  * Copyright (C) 2008 Emmanuel Rodriguez
  * 
@@ -35,51 +35,69 @@ private import burato.error: FormattedException;
  * Representation of an Address (host, port).
  *
  * This class is almost identical to an InternetAddress, the main difference is
- * that here the host is not resolved into an IP address.
+ * that here the host is not necessarily resolved into an IP address.
  */
 public class NetworkAddress {
 
 	const string host;
 	const ushort port;
 
-	this(string host, ushort port) {
+	public this(string host, ushort port) {
 		this.host = host;
 		this.port = port;
 	}
 	
 	public string toString() {
-		return format("%s(host=%s, port=%d)", super.toString(), this.host, this.port);
+		return format(
+			"%s(host=%s, port=%d)", 
+			super.toString(), 
+			this.host, 
+			this.port
+		);
 	}
 }
 
 
 /**
- * Finds the local address to used for the connection to the given host.
+ * Finds a local address to use for the connection to the given host. This 
+ * function tries to find a free port that can be used for connection to the
+ * given remote address.
+ *
+ * This function assumes that if a TCP/IP connection is made with a 'reusable'
+ * random port, that the port will NOT be reused by the OS for a short lapse of
+ * time unless if requested explicitly. Thus if another process requests a
+ * socket without specifiying a port that the new port returned will not be the
+ * one that was given to this function.
  *
  * Throws SocketException if an error occurs with the socket or 
  * FormattedException if the local address is not an InternetAddress.
  */
-public InternetAddress getLocalAddress (NetworkAddress address) {
+public NetworkAddress getLocalAddressForRemoteConnection (NetworkAddress remoteAddress) {
 
 	// Prepare the socket
 	Socket socket = new Socket(AddressFamily.INET, SocketType.STREAM, ProtocolType.TCP);
 	socket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
 	// Connect to the remote end
-	socket.connect(new InternetAddress(address.host, address.port));
+	socket.connect(new InternetAddress(remoteAddress.host, remoteAddress.port));
 	
 	// Get the local address and and quit
-	Address remote = socket.localAddress();
+	Address local = socket.localAddress();
 	socket.close();
 	
 	// Make sure that we have an Internet address
-	if (remote.addressFamily != AddressFamily.INET) {
+	if (local.addressFamily != AddressFamily.INET) {
 		throw new FormattedException(
 			"Socket to %s:%d is of wrong address family (%s)", 
-			address.host, address.port, remote
+			remoteAddress.host, remoteAddress.port, local
 		);
 	}
-	InternetAddress inetAddress = cast(InternetAddress) remote;
+	InternetAddress inetAddress = cast(InternetAddress) local;
 	
-	return inetAddress;
+	NetworkAddress localAddress = new NetworkAddress(
+		inetAddress.toAddrString(), 
+		inetAddress.port
+	);
+	
+	return localAddress;
 }
