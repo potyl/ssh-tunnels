@@ -24,7 +24,7 @@ module test.ssh_config;
  * This module provides unit tests for the module ssh_config.
  */
 
-import burato.ssh_config;
+import burato.ssh.config;
 import std.stdio;
 
 unittest {
