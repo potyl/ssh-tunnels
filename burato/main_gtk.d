@@ -51,7 +51,7 @@ private import std.file:
 	exists
 ;
 
-private import std.process: waitpid;
+private import std.process: waitpid ,pid_t;
 
 private import std.c.linux.linux:
 	SIGINT,
@@ -91,12 +91,16 @@ private import gobject.Value;
 private import glade.Glade;
 
 
-private import burato.tunnel;
 private import burato.signal: 
 	signal,
 	runUninterrupted,
 	SIG_IGN
 ;
+private import burato.ssh.manager;
+private import burato.ssh.connection;
+private import burato.ssh.tunnel;
+private import burato.network;
+
 
 /**
  * Constant used by waitpid in order to return right away.
@@ -147,11 +151,11 @@ private class TunnelsListStore : ListStore {
 
 
 	private class Item {
-		Tunnel tunnel;
+		SshConnection connection;
 		TreeIter iter;
 		
-		this (Tunnel tunnel, TreeIter iter) {
-			this.tunnel = tunnel;
+		this (SshConnection connection, TreeIter iter) {
+			this.connection = connection;
 			this.iter = iter;
 		}
 	}
@@ -165,18 +169,29 @@ private class TunnelsListStore : ListStore {
 	 */
 	private Item [pid_t] items;
 
+	private SshManager manager;
+
 
 	this() {
 		super(COLUMNS);
 	}
 	
 	
-	void add (Tunnel tunnel) {
+	/**
+	 * Creates an SSH connection and adds it to the store.
+	 */
+	void add (string hop, NetworkAddress [] targetAddresses) {
 		
-		Item item = new Item(tunnel, this.createIter());
+		SshConnection connection = this.manager.createSshConnection(hop, targetAddresses);
+		Item item = new Item(connection, this.createIter());
 
 		int pos = 0;
-		this.setValue(item.iter, pos++, tunnel.hop);
+		this.setValue(item.iter, pos++, connection.hop);
+		// FIXME For the moment the main GUI can create only one tunnel per SSH
+		//       connection. This is because in the past the application could only
+		//       handle one tunnel per connection. Now the framework allows the
+		//       tunneling of multiple ports through one SSH connection.
+		SshTunnel tunnel = connection.tunnels[0];
 		this.setValue(item.iter, pos++, tunnel.target.port);
 		this.setValue(item.iter, pos++, tunnel.target.host);
 
@@ -189,7 +204,7 @@ private class TunnelsListStore : ListStore {
 		}
 
 		
-		this.items[tunnel.pid] = item;
+		this.items[connection.pid] = item;
 	}
 	
 	
@@ -197,18 +212,12 @@ private class TunnelsListStore : ListStore {
 	 * Removes the tunnel with the given PID from the store.
 	 */
 	void closeTunnel (pid_t pid) {
-		
-		void task () {	
-			// Find the tunnel that corresponds to the PID
-			Tunnel tunnel = this.discard(pid);
-			if (tunnel !is null) {
-				writefln("closeTunnel >> task >> tunnel.disconnect() for pid %d", pid);
-				tunnel.disconnect();
-			}
-		}
-		
-		runUninterrupted(&task, SIGNALS);
-		writefln("Tunnel with PID %d finish", pid);
+		// FIXME make this method private and add a more visible method that will
+		//       delete the tunnel based on the PID (called from a signal handler)
+		//       and that will also remove the tunnel from the GUI. For this we
+		//       might need a mapping pid -> TreeIter and TreeIter -> path.
+		this.manager.removeSshConnection(pid);
+		this.items.remove(pid);
 	}
 	
 	
@@ -232,28 +241,16 @@ private class TunnelsListStore : ListStore {
 	}
 	
 	
-	/**
-	 * Removes the tunnel with the given PID from the store and returns the tunnel
-	 * removed. If there's no tunnel undef will be returned.
-	 */
-	private Tunnel discard (pid_t pid) {
+	void closeAll () {
+		writefln("Application has %d items", this.items.length);
+		this.manager.closeSshConnections();
 		
-		// Find the tunnel to discard in the hash
-		Item *pointer = (pid in this.items);
-		if (pointer is null) {
-			return null;
-		}
-		Item item = *pointer;
-		
-		// Remove it from the hash
-		this.items.remove(pid);
-		
-		
-		// And from the store
-		this.remove(item.iter);
-
-		return item.tunnel;
-	}
+//		foreach (Item item; this.items) {
+//			SshConnection connection = item.connection;
+//			writefln("quit >> Closing tunnel %s PID %d", connection, connection.pid);
+//			connection.disconnect();
+//		}
+	}	
 }
 
 
@@ -525,19 +522,11 @@ class Application {
 			return;
 		}
 		
-
-		// Create the tunnel instance
-		Tunnel tunnel = new Tunnel(hop, target, port);
 		
-		// Open the tunnel, make sure to keep it in order to close it latter
-		void openTunnel() {
-			pid_t pid = tunnel.connect();
-			this.store.add(tunnel);
-		};
-		runUninterrupted(&openTunnel, SIGNALS);
-		
-
-		writefln("Create %s", tunnel);
+		NetworkAddress [] targetAddresses = [
+			new NetworkAddress(target, port)
+		];
+		this.store.add(hop, targetAddresses);
 	}
 	
 	
@@ -628,12 +617,7 @@ class Application {
 		
 		writefln("Calling quit()");
 		
-		writefln("Application has %d items", this.store.items.length);
-		foreach (TunnelsListStore.Item item; this.store.items) {
-			Tunnel tunnel = item.tunnel;
-			writefln("quit >> Closing tunnel %s PID %d", tunnel, tunnel.pid);
-			tunnel.disconnect();
-		}
+		this.store.closeAll();
 		
 		writefln("Calling Main.quit()");
 		Main.quit();

@@ -1,5 +1,5 @@
 /*
- * tunnel.d
+ * tunnel.d - wraps an iptables rule for a single port redirection.
  *
  * Copyright (C) 2008 Emmanuel Rodriguez
  * 
@@ -18,112 +18,40 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-module burato.tunnel;
+module burato.ssh.tunnel;
 
 /**
- * This module provides the class Tunnel which is used to wrap an SSH tunnel
- * with a custom iptable rule.
+ * This module provides the class Tunnel which is used to wrap a single SSH port
+ * redirection that's paried with a custom iptables rule.
  *
- * This class implements an SSH tunnel that's backed by an iptables rule used to
- * redirect the connections to the target host through it's usual port through
- * the local tunnel by using the local port.
+ * This class is used to control the iptables rule that correspond to a single
+ * SSH tunnel. The tunnel is controlled by an SSH process that's wrapped around
+ * an instance of Connection.
+ *
+ * A tunnel is a point to point connection, thus it requires a local address
+ * (host and port) and a target address (host and port).
  */
+
+private import std.stdio;
+private import std.c.linux.linux: pid_t;
+private import std.process: system;
  
-private import std.stdio: writefln;
-private import std.string: format;
-private import std.process: execvp, system;
-private import std.socket;
-private import std.path: expandTilde;
-
-private import std.c.process: getpid;
-private import std.c.linux.linux;
-
-private import burato.signal: signalsUnblock;
-private import burato.fork: forkTask, pid_t;
-private import burato.error: FormattedException, ErrnoException;
-private import burato.ssh_config: getNetworkAddress;
-private import burato.network: getLocalAddress, NetworkAddress;
-
-private const int [] SIGNALS = [
-	SIGHUP,
-	SIGINT,
-	SIGQUIT,
-	SIGILL,
-	SIGTRAP,
-	SIGABRT,
-	SIGIOT,
-	SIGBUS,
-	SIGFPE,
-	SIGKILL,
-	SIGUSR1,
-	SIGSEGV,
-	SIGUSR2,
-	SIGPIPE,
-	SIGALRM,
-	SIGTERM,
-	SIGSTKFLT,
-	SIGCHLD,
-	SIGCONT,
-	SIGSTOP,
-	SIGTSTP,
-	SIGTTIN,
-	SIGTTOU,
-	SIGURG,
-	SIGXCPU,
-	SIGXFSZ,
-	SIGVTALRM,
-	SIGPROF,
-	SIGWINCH,
-	SIGPOLL,
-	SIGIO,
-	SIGPWR,
-	SIGSYS,
-];
+private import burato.network;
 
 
-
-/**
- * Representation of an SSH tunnel. A tunnel is backed by an SSH process. For
- * the moment an tunnel requires a dedicated SSH connection and different
- * tunnels, even for the same targets, have to be made through different SSH
- * connections.
- */
-class Tunnel {
+package class SshTunnel {
 	
-	pid_t pid;
-	string hop;
-
-	NetworkAddress local;
-	NetworkAddress target;
+	const NetworkAddress local;
+	const NetworkAddress target;
 
 	
 	/**
 	 * Creates a new Tunnel instance. This tunnel is not yet connected, this has
 	 * to be performed through the method "connect".
 	 */
-	this(string hop, string localHost, ushort localPort, string targetHost, ushort targetPort) {
-		this.pid = 0;
-		this.hop = hop;
-		this.local = new NetworkAddress(localHost, localPort);
-		this.target = new NetworkAddress(targetHost, targetPort);
-	}
-
-	
-	/**
-	 * Creates a new Tunnel instance. This tunnel is not yet connected, this has
-	 * to be performed through the method "connect". Furthermore, the local port
-	 * and local address to use will be found automatically.
-	 */
-	this(string hop, string host, ushort port) {
-		
-		// Resolve the real hostname of the SSH hop and the port to use
-		NetworkAddress address = getNetworkAddress(hop);
-		
-		// Find a free local port to use
-		InternetAddress intAddress = getLocalAddress(address);
-		
-		// Create the instance
-		this(hop, intAddress.toAddrString(), intAddress.port, host, port);
+	package this(NetworkAddress local, NetworkAddress target) {
+		this.local = local;
+		this.target = target;
 	}
 	
 	
@@ -131,14 +59,14 @@ class Tunnel {
 	 * Connects the tunnel by creating an SSH tunnel and creating the
 	 * corresponding iptables rule.
 	 */
-	pid_t connect () {
-		// Create the SSH tunnel
-		this.pid = forkTask(&this.createSSHConnection);
-		
+	package void connect () {
 		// Create the iptable rule
+		writefln("Creating an iptables rules to %s:%d via port %d",
+			this.target.host,
+			this.target.port,
+			this.local.port
+		);
 		this.doIpTableRule("-A");
-		
-		return this.pid;
 	}
 
 	
@@ -146,47 +74,9 @@ class Tunnel {
 	 * Disconnects the tunnel by closing the SSH tunnel and removing the
 	 * corresponding iptables rule.
 	 */
-	void disconnect () {
-
-		// Kill the SSH tunnel
-writefln("Tunnel >> disconnect >> kill %d", this.pid);
-		kill(this.pid, SIGTERM);
-		
+	package void disconnect () {
 		// Delete the iptable rule
-writefln("Tunnel >> disconnect >> doIpTableRule -D");
 		this.doIpTableRule("-D");
-	}
-
-
-	/**
-	 * Creates an SSH connection that will open a tunnel to the target.
-	 */
-	private void createSSHConnection () {
-		
-		// The string used to tell SSH what tunnel to create
-		string tunnel = format("%d:%s:%d", 
-			this.local.port,
-			this.target.host,
-			this.target.port
-		);
-	
-		// The actual SSH tunnel
-		string [] command = [
-			"ssh",
-				"-L", tunnel,
-				"-NnTxa",
-				"-o", "ServerAliveInterval=300",
-				this.hop
-		];
-
-		// Unblock all signals since the signal mask stays valid even in an exec
-		signalsUnblock(SIGNALS);
-
-		// Exec the command
-		execvp(command[0], command);
-
-		// Exec is not supposed to fail
-		throw new ErrnoException("Exec failed");
 	}
 
 	
@@ -205,7 +95,8 @@ writefln("Tunnel >> disconnect >> doIpTableRule -D");
 		system(command);
 	}
 	
-	string toString() {
+
+	public string toString() {
 		return format(
 			"SSH tunnel %s:%s via %d", 
 			this.target.host,
@@ -213,32 +104,4 @@ writefln("Tunnel >> disconnect >> doIpTableRule -D");
 			this.local.port
 		);
 	}
-}
-
-
-/**
- * Finds the NetworkAddress (real hostname and port) of the the given host. This
- * function is needed because the host is in the same format as OpenSSH expects
- * its hosts. In fact the host used by OpenSSH can also be an alias that will be
- * latter resolved to a valid host name. Futhermore, the host might be using a
- * different port. Also the host is allowed to have an user name. For instance,
- * the following host: "root@mailserver" is valid.
- *
- * If the host can't be found the "null' will be returned.
- */
-private NetworkAddress getNetworkAddress (string host) {
-	
-	string [] files = [
-		expandTilde("~/.ssh/config"),
-		"/etc/ssh/ssh_config",
-	];
-
-	foreach (string file; files) {
-		NetworkAddress address = getNetworkAddress(host, file);
-		if (address !is null) {
-			return address;
-		}
-	}
-
-	return null;
 }

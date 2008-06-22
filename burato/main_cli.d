@@ -57,13 +57,15 @@ private import burato.signal:
 	runUninterrupted
 ;
 
-private import burato.tunnel;
+private import burato.ssh.manager;
+private import burato.ssh.connection;
+private import burato.network;
 
 
 /**
  * The tunnels opened so far.
  */
-Tunnel [pid_t] TUNNELS;
+SshManager MANAGER;
 
 
 
@@ -77,9 +79,12 @@ int main (string [] args) {
 		writefln("Usage: hop port:host...");
 		return 1;
 	}
+	
+	// The SSH hopping station
 	string hop = args[1];
-writefln("args: %d", args.length);	
-	NetworkAddress [] addresses;// = new NetworkAddress[args.length - 2];
+	
+	// Get the addresses (host, port) of the tunnels to create
+	NetworkAddress [] addresses;
 	for (size_t i = 2; i < args.length; ++i) {
 		string arg = args[i];
 		string [] parts = split(arg, ":");
@@ -88,8 +93,6 @@ writefln("args: %d", args.length);
 			writefln("Ignoring argument %d ('%s') because it has a bad syntax.", i, arg);
 			continue;
 		}
-		
-		writefln("arg %d %s", i, arg);
 		
 		string host = parts[0];
 		ushort port = cast(ushort) atoi(parts[1]);
@@ -103,13 +106,7 @@ writefln("args: %d", args.length);
 		writefln("Couldn't parse a single host:port pair.");
 		return 1;
 	}
-	
-	return 0;
-	
-	ushort port = cast(ushort) atoi(args[2]);
-	string [] hosts = args[3 .. args.length];
-	
-	
+
 	const int [] signals = [
 		SIGINT,
 		SIGTERM,
@@ -121,94 +118,14 @@ writefln("args: %d", args.length);
 		signal(sig, &quitSighandler);
 	}
 
-	createTunnels(hop, port, hosts, signals);
-	
-	waitForTunnels(signals);
+
+	SshManager manager = new SshManager(signals);
+	MANAGER = manager;
+
+	SshConnection connection = manager.createSshConnection(hop, addresses);
+	manager.waitForTunnelsToDie();
 	
 	return 0;
-}
-
-
-/**
- * Creates the tunnels to the given hosts/port by using the given hop.
- * @deprecated use createTunnels (string hop, NetworkAddress [] addresses, int [] signals)
- */
-private void createTunnels (string hop, ushort port, string [] hosts, int [] signals) {
-
-	foreach (string host; hosts) {
-	
-		// Create the tunnel
-		// FIXME This is little bit overkill since OpenSSH is able to forward
-		//       multiple ports with one connection. Here it would be trully nice
-		//       to do the same wrap all tunnels through the same hop within a
-		//       single OpenSSH connection.
-
-		Tunnel tunnel = new Tunnel(hop, host, port);
-		writefln("Creating %s", tunnel);
-
-		// Open the tunnel, make sure to keep it in order to close it latter
-		void openTunnel() {
-			pid_t pid = tunnel.connect();
-			TUNNELS[pid] = tunnel;
-		};
-		runUninterrupted(&openTunnel, signals);
-	}
-}
-
-
-/**
- * Creates the tunnels to the given hosts/port by using the given hop.
- */
-private void createTunnels (string hop, NetworkAddress [] addresses, int [] signals) {
-
-	// Open a single tunnel through the same hop
-	Tunnel tunnel = new Tunnel(hop, addresses);
-
-	// Open the tunnel, make sure to keep it in order to close it latter
-	void openTunnel() {
-		pid_t pid = tunnel.connect();
-		TUNNELS[pid] = tunnel;
-	};
-	runUninterrupted(&openTunnel, signals);
-}
-
-
-/**
- * Waits for the tunnels to finish.
- */
-private void waitForTunnels (int [] signals) {
-
-	// Wait for the tunnels to resume
-	writefln("Waiting for childs: %s from %d", TUNNELS.keys, getpid());
-	while (TUNNELS.length > 0) {
-		
-		// Wait for a tunnel to die
-		int status;
-		pid_t pid = waitpid(-1, &status, 0);
-		
-		// Delegate used to close the tunnel
-		void closeTunel() {
-		
-			writefln("Child PID %d has resumed with status: %d", pid, status);
-			writefln("stopped    = %s", stopped(status));
-			writefln("signaled   = %s", signaled(status));
-			writefln("exited     = %s", exited(status));
-			writefln("exitstatus = %d", exitstatus(status));
-			writefln("termsig    = %d", termsig(status));
-
-			// Find out which tunnel died
-			Tunnel *pointer = (pid in TUNNELS);
-			if (pointer is null) {
-				return;
-			}
-			TUNNELS.remove(pid);
-
-			Tunnel tunnel = *pointer;
-			tunnel.disconnect();
-		};
-
-		runUninterrupted(&closeTunel, signals);
-	}
 }
 
 
@@ -218,34 +135,6 @@ private void waitForTunnels (int [] signals) {
 private void quitSighandler (int sig) {
 	writefln("Program caught a termination signal. Closing all tunnels.");
 
-	foreach (Tunnel tunnel; TUNNELS) {
-		writefln("Closing tunnel %s", tunnel);
-		tunnel.disconnect();
-	}
+	MANAGER.closeSshConnections();
 	std.c.stdlib._exit(0);
-}
-
-
-// Stolen from std.process
-private {
-
-	bool stopped (int status) {
-		return cast(bool)((status & 0xff) == 0x7f);
-	}
-
-	bool signaled(int status) {
-		return cast(bool)((cast(char)((status & 0x7f) + 1) >> 1) > 0);
-	}
-
-	int  termsig (int status) {
-		return status & 0x7f;
-	}
-
-	bool exited (int status) {
-		return cast(bool)((status & 0x7f) == 0);
-	}
-
-	int  exitstatus (int status) {
-		return (status & 0xff00) >> 8;
-	}
 }
