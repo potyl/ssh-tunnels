@@ -94,10 +94,10 @@ public class SshManager {
 
 		// Build the tunnel instances that will be managed by this connection. The 
 		// tunnels are not yet connected.
-		NetworkAddress [] localAddresses = new NetworkAddress [targetAddresses.length];
 		SshTunnel [] tunnels = new SshTunnel[targetAddresses.length];
 		
 		foreach (int i, NetworkAddress targetAddress; targetAddresses) {
+
 			// Find a free local port to use
 			NetworkAddress localAddress = getLocalAddressForRemoteConnection(hopAddress);
 			
@@ -114,7 +114,7 @@ public class SshManager {
 			this.connections[pid] = connection;
 		}
 		runUninterrupted(&openConnection, this.signals);
-		
+
 		return connection;
 	}
 	
