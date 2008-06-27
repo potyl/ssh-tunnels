@@ -104,7 +104,7 @@ public NetworkAddress getNetworkAddress(string host, string [string] directives,
 			}
 		}
 	}
-writefln("==>Directives for %s:\n%s\n", host, directives);
+
 
 	// Extract the hostname and the port from the directives
 	string hostname = getDirectiveValue(directives, "HostName", host);
@@ -252,18 +252,15 @@ private class ConfigurationFile {
 				this.directive = directive;
 				break;
 			}
-writefln("parsed %s=%s", directive.keyword, directive.value);			
 			
 			// Insert the directive only if it's the first time that it's seen
 			string *pointer = (directive.keyword in directives);
 			if (pointer is null) {
 				directives[directive.keyword] = directive.value;
-writefln("==>Adding directives %s = %s", directive.keyword, directive.value);
 			}
 		}
 
 
-	writefln("Section is %s", directives);
 		return directives;
 	}
 }
