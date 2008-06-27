@@ -193,7 +193,17 @@ public class SshConnection {
 		return this.hop_;
 	}
 	public SshTunnel [] tunnels () {
-		return this.tunnels;
+		return this.tunnels_;
 	}
 
+	
+
+	public string toString() {
+		return format(
+			"SSH connection to %s using PID %d with %d tunnels", 
+			this.hop_,
+			this.pid_,
+			this.tunnels_.length
+		);
+	}
 }
