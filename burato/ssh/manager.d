@@ -37,6 +37,7 @@ module burato.ssh.manager;
 private import std.stdio;
 private import std.path: expandTilde; 
 private import std.process: getpid, waitpid;
+private import std.string: format;
 
 private import burato.ssh.config;
 private import burato.ssh.connection;
@@ -89,7 +90,6 @@ public class SshManager {
 
 		// Resolve the real hostname of the SSH hop and the port to use
 		NetworkAddress hopAddress = getNetworkAddress(hop);
-		writefln("SSH hop is %s", hopAddress);
 		
 
 		// Build the tunnel instances that will be managed by this connection. The 
@@ -114,6 +114,15 @@ public class SshManager {
 			this.connections[pid] = connection;
 		}
 		runUninterrupted(&openConnection, this.signals);
+		
+		writefln(
+			"%s:%d > Created an SSH connection to %s (PID: %d) with %d tunnels",
+			__FILE__, __LINE__,
+			connection.hop,
+			connection.pid,
+			connection.tunnels.length
+		);
+		
 
 		return connection;
 	}
@@ -126,35 +135,24 @@ public class SshManager {
 	 */
 	public void waitForTunnelsToDie () {
 
-		// Wait for the tunnels to resume
+		// Wait for the SSH processes to resume
 		writefln("Waiting for childs: %s from %d", this.connections.keys, getpid());
 		while (this.connections.length > 0) {
 			
-			// Wait for a tunnel to die
+			// Wait for a process to finish (usually by being killed)
 			int status;
 			pid_t pid = waitpid(-1, &status, 0);
-			
-			// Delegate used to close the tunnel
-			void closeConnection () {
-			
-				writefln("Child PID %d has resumed with status: %d", pid, status);
-				writefln("stopped    = %s", stopped(status));
-				writefln("signaled   = %s", signaled(status));
-				writefln("exited     = %s", exited(status));
-				writefln("exitstatus = %d", exitstatus(status));
-				writefln("termsig    = %d", termsig(status));
-
-				// Find out which tunnel died
-				SshConnection *pointer = (pid in this.connections);
-				if (pointer is null) {return;}
-				this.connections.remove(pid);
-
-				// Close the SSH tunnel
-				SshConnection connection = *pointer;
-				connection.disconnect();
-			};
-
-			runUninterrupted(&closeConnection, signals);
+writefln("%s:%d > A process ended (PID: %d)", pid);
+			// Make sure that the process died, waitpid can return when the process is
+			// being traced (ptrace) thus still alive
+			if (signaled(status) || exited(status)) {
+				// Remove the SSH connection (remove the iptables rules)
+writefln("%s:%d > A process ended (PID: %d) through a signal or a kill", pid);
+				this.removeSshConnection(pid);
+			}
+			else {
+writefln("%s:%d > A process ended (PID: %d) but wasn't signaled or didn't died", pid);
+			}
 		}
 	}
 	
@@ -176,14 +174,30 @@ public class SshManager {
 	 * returned.
 	 */
 	public SshConnection removeSshConnection (pid_t pid) {
-		// Make sure that there's a connection with that PID
+
+		// Find the SSH connection that's backed by the given PID
 		SshConnection *pointer = (pid in this.connections);
 		if (pointer is null) {
 			return null;
 		}
 		SshConnection connection = *pointer;
 		
-		// Remove it from the hash
+		writefln(
+			"%s:%d > Removing the SSH connection to %s (PID: %d) with %d tunnels", __FILE__, __LINE__,
+			connection.hop,
+			connection.pid,
+			connection.tunnels.length
+		);
+
+
+		// Close the tunnel (interruptions through a kill are forbidden)
+		void closeConnection () {
+			connection.disconnect();
+		};
+		runUninterrupted(&closeConnection, this.signals);
+
+
+		// Remove then entry from the hash
 		this.connections.remove(pid);
 		
 		return connection;
@@ -222,23 +236,11 @@ private NetworkAddress getNetworkAddress (string host) {
 // Stolen from std.process
 private {
 
-	bool stopped (int status) {
-		return cast(bool)((status & 0xff) == 0x7f);
-	}
-
-	bool signaled(int status) {
+	bool signaled (int status) {
 		return cast(bool)((cast(char)((status & 0x7f) + 1) >> 1) > 0);
-	}
-
-	int  termsig (int status) {
-		return status & 0x7f;
 	}
 
 	bool exited (int status) {
 		return cast(bool)((status & 0x7f) == 0);
-	}
-
-	int  exitstatus (int status) {
-		return (status & 0xff00) >> 8;
 	}
 }
