@@ -60,13 +60,17 @@ package class SshTunnel {
 	 * corresponding iptables rule.
 	 */
 	package void connect () {
+
 		// Create the iptable rule
-		writefln("Creating an iptables rules to %s:%d via port %d",
+		this.doIpTableRule("-A");
+
+		writefln(
+			"%s:%d > Created iptables rules to %s:%d via port %d",
+			__FILE__, __LINE__,
 			this.target.host,
 			this.target.port,
 			this.local.port
 		);
-		this.doIpTableRule("-A");
 	}
 
 	
@@ -75,8 +79,17 @@ package class SshTunnel {
 	 * corresponding iptables rule.
 	 */
 	package void disconnect () {
+
 		// Delete the iptable rule
 		this.doIpTableRule("-D");
+
+		writefln(
+			"%s:%d > Removed iptables rules to %s:%d via port %d",
+			__FILE__, __LINE__,
+			this.target.host,
+			this.target.port,
+			this.local.port
+		);
 	}
 
 	
@@ -85,6 +98,7 @@ package class SshTunnel {
 	 * "-A" for creating the rule or "-D" for deleting the rule.
 	 */
 	private void doIpTableRule (string action) {
+
 		string command = format(
 			"sudo iptables -v -t nat %s OUTPUT -p tcp --dport %d -d %s -j REDIRECT --to-ports %d",
 			action,
@@ -92,7 +106,21 @@ package class SshTunnel {
 			this.target.host,
 			this.local.port
 		);
+
+		// NOTE sometimes the call to system doesn't return and the whole
+		//      application hangs. Maybe the reason is that the main application was
+		//      relying on a signal handler (SIGCHLD) for cathing all signals and
+		//      that the handler is conflicting with the function system. This is
+		//      because system is implemented through a fork and waitpid sequence.
+		writefln("%s:%d > %s", __FILE__, __LINE__, command);
 		system(command);
+		writefln(
+			"%s:%d > Cancelled the iptables rules to %s:%d via port %d",
+			__FILE__, __LINE__,
+			this.target.host,
+			this.target.port,
+			this.local.port
+		);
 	}
 	
 
