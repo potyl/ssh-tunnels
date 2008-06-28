@@ -45,6 +45,11 @@ private import burato.ssh.tunnel;
 private import burato.network;
 private import burato.signal: runUninterrupted;
 
+// FIXME relying on gtk.Timeout is too overkill (use glib.Timeout instead).
+private import gtk.Timeout;
+
+private const int WNOHANG = 1;
+
 public class SshManager {
 	
 	/**
@@ -57,7 +62,12 @@ public class SshManager {
 	 * The signal to block during the delicate operations with the SSH tunnels
 	 * (creating/closing).
 	 */
-	int [] signals;	
+	int [] signals;
+	
+	/**
+	 * Timeout used to monitor the SSH processes.
+	 */
+	private Timeout timeout = null;
 	
 
 	/**
@@ -68,10 +78,7 @@ public class SshManager {
 	 * that the iptables rules are manipulated properly.
 	 */
 	public this (int [] signals) {
-		if (signals is null) {
-			signals = new int [0];
-		}
-		this.signals = signals;
+		this.signals = signals is null ? new int [0] : signals;
 	}
 
 
@@ -123,6 +130,11 @@ public class SshManager {
 			connection.tunnels.length
 		);
 		
+		
+		// Creates a periodic check that's used to monitor the SSH connections 
+		if (this.timeout is null) {
+			this.timeout = new Timeout(1000, &onTimeout, false);
+		}
 
 		return connection;
 	}
@@ -142,16 +154,11 @@ public class SshManager {
 			// Wait for a process to finish (usually by being killed)
 			int status;
 			pid_t pid = waitpid(-1, &status, 0);
-writefln("%s:%d > A process ended (PID: %d)", pid);
 			// Make sure that the process died, waitpid can return when the process is
 			// being traced (ptrace) thus still alive
 			if (signaled(status) || exited(status)) {
 				// Remove the SSH connection (remove the iptables rules)
-writefln("%s:%d > A process ended (PID: %d) through a signal or a kill", pid);
 				this.removeSshConnection(pid);
-			}
-			else {
-writefln("%s:%d > A process ended (PID: %d) but wasn't signaled or didn't died", pid);
 			}
 		}
 	}
@@ -183,7 +190,8 @@ writefln("%s:%d > A process ended (PID: %d) but wasn't signaled or didn't died",
 		SshConnection connection = *pointer;
 		
 		writefln(
-			"%s:%d > Removing the SSH connection to %s (PID: %d) with %d tunnels", __FILE__, __LINE__,
+			"%s:%d > Removing the SSH connection to %s (PID: %d) with %d tunnels",
+			__FILE__, __LINE__,
 			connection.hop,
 			connection.pid,
 			connection.tunnels.length
@@ -201,6 +209,65 @@ writefln("%s:%d > A process ended (PID: %d) but wasn't signaled or didn't died",
 		this.connections.remove(pid);
 		
 		return connection;
+	}
+	
+	
+	/**
+	 * GTK timeout called to monitor the SSH processes.
+	 */
+	private bool onTimeout () {
+		
+		writefln("%s:%d > Idle timeout", __FILE__, __LINE__);
+
+
+		// Check the status of each process without blocking (this has to be quick)
+		foreach (pid_t pid, SshConnection connection; this.connections) {
+
+			// Wait for a process to finish (usually by being killed)
+			int status;
+			pid_t pid_got = waitpid(pid, &status, WNOHANG);
+
+			if (pid_got == 0) {
+				// The process is still alive, there's nothing to do
+				continue;
+			}
+			else if (pid_got != pid) {
+				writefln(
+					"%s:%d > ERROR waited for pid %d and got an answer for pid %d",
+					__FILE__, __LINE__,
+					pid, pid_got
+				);
+			}
+
+			// Make sure that the process died, waitpid can return when the process is
+			// being traced (ptrace) thus still alive
+			if (signaled(status) || exited(status)) {
+				// Remove the SSH connection since the SSH process died
+				writefln("%s:%d > SSH process %d resumed", __FILE__, __LINE__, pid);
+				this.removeSshConnection(pid);
+			}
+		}
+
+
+//
+// FIXME this method should provide a way to notify the holder of this instance
+//       that a tunnel has been closed. For instance the GUI needs to know this
+//       in order to remove the tunnel from it's data store
+//
+
+
+		// Disable the timeout if there's nothing more to monitor
+		if (this.connections.length == 0) {
+			writefln(
+				"%s:%d > Disabling the timeout, no more processes to watch",
+				__FILE__, __LINE__
+			);
+			this.timeout = null;
+			return false;
+		}
+		
+
+		return true;
 	}
 }
 
