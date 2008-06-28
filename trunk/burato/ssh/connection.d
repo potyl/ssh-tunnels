@@ -137,11 +137,22 @@ public class SshConnection {
 
 		// Kill the SSH tunnel
 		kill(this.pid_, SIGTERM);
+		writefln(
+			"%s:%d > Killed SSH process %d",
+			__FILE__, __LINE__,
+			this.pid_
+		);
+
 		
 		// Delete the iptables rules
 		foreach (SshTunnel tunnel; this.tunnels_) {
 			tunnel.disconnect();
 		}
+		writefln(
+			"%s:%d > Closed %d tunnels", 
+			__FILE__, __LINE__,
+			this.tunnels_.length
+		);
 	}
 
 
@@ -178,7 +189,11 @@ public class SshConnection {
 		signalsUnblock(SIGNALS);
 
 		// Exec the command
-		writefln("Creating SSH process: %s", command);
+		writefln(
+			"%s:%d > Creating the SSH process: %s", 
+			__FILE__, __LINE__,
+			command
+		);
 		execvp(command[0], command);
 
 		// Exec is not supposed to fail
