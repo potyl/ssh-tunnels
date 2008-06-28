@@ -83,6 +83,8 @@ private import gtk.CellRendererText;
 private import gtk.TreeIter;
 private import gtk.TreePath;
 
+private import gtk.Timeout;
+
 private import gdk.Keymap;
 private import gdk.Event;
 private import gdk.Rectangle;
@@ -136,6 +138,7 @@ private const int [] SIGNALS = [
 private string RESOURCE_PATH = ".";
 
 
+
 /**
  * Custom ListStore used to wrap the tunnels.
  */
@@ -169,11 +172,12 @@ private class TunnelsListStore : ListStore {
 	 */
 	private Item [pid_t] items;
 
-	private SshManager manager;
+	private const SshManager manager;
 
 
-	this() {
+	this () {
 		super(COLUMNS);
+		this.manager = new SshManager(SIGNALS);
 	}
 	
 	
@@ -181,7 +185,7 @@ private class TunnelsListStore : ListStore {
 	 * Creates an SSH connection and adds it to the store.
 	 */
 	void add (string hop, NetworkAddress [] targetAddresses) {
-		
+	
 		SshConnection connection = this.manager.createSshConnection(hop, targetAddresses);
 		Item item = new Item(connection, this.createIter());
 
@@ -192,6 +196,7 @@ private class TunnelsListStore : ListStore {
 		//       handle one tunnel per connection. Now the framework allows the
 		//       tunneling of multiple ports through one SSH connection.
 		SshTunnel tunnel = connection.tunnels[0];
+
 		this.setValue(item.iter, pos++, tunnel.target.port);
 		this.setValue(item.iter, pos++, tunnel.target.host);
 
@@ -203,53 +208,79 @@ private class TunnelsListStore : ListStore {
 			this.setValue(item.iter, pos++, value);
 		}
 
-		
 		this.items[connection.pid] = item;
 	}
 	
 	
 	/**
-	 * Removes the tunnel with the given PID from the store.
+	 * Closes the SSH connection that's backed by the given PID.
 	 */
-	void closeTunnel (pid_t pid) {
-		// FIXME make this method private and add a more visible method that will
-		//       delete the tunnel based on the PID (called from a signal handler)
-		//       and that will also remove the tunnel from the GUI. For this we
-		//       might need a mapping pid -> TreeIter and TreeIter -> path.
-		this.manager.removeSshConnection(pid);
-		this.items.remove(pid);
+	void closeSshConnection (pid_t pid) {
+
+		// Find the connection to discard in the hash
+		Item *pointer = (pid in this.items);
+		if (pointer is null) {
+			return;
+		}
+		Item item = *pointer;
+		this.discardSshConnection(item);
 	}
 	
 	
 	/**
-	 * Removes the tunnel designated by the given TreeIter from the store.
+	 * Closes the SSH connection designated by the given TreeIter from the store.
 	 */
-	void closeTunnel (TreeIter iter) {
+	void closeSshConnection (TreeIter iter) {
 		
+		// The path of the iter to remove
 		TreePath path = this.getPath(iter);
-		writefln("My path %s", path.toString());
 		
-		foreach (pid_t pid, Item item; items) {
+		// Find the same path in the tree store
+		foreach (Item item; items) {
 			TreePath itemPath = this.getPath(item.iter);
-			writefln("THE path %s", itemPath.toString());
 			
 			if (path.compare(itemPath) == 0) {
-				this.closeTunnel(pid);
+				// Remove the SSH connection corresponding to the given path
+				this.discardSshConnection(item);
 				return;
 			}
 		}
 	}
 	
+
+	/**
+	 * This method performs the removal of an SSH connection. At first it starts
+	 * by removing the SSH connection from the SSH manager. This will close the
+	 * SSH process if the process is still running and it will remove the iptables
+	 * rules associated with the tunnels. Once the connection is removed from the
+	 * SSH manager it will be also removed from the store, this will have for
+	 * effect of removing the entry from the GUI.
+	 */
+	private void discardSshConnection (Item item) {
+	
+		pid_t pid = item.connection.pid;
+
+		// Remove the SSH connection from the manager (kill pid, remove iptables)
+		this.manager.removeSshConnection(pid);
+
+		// Remove the entry from our items lookup
+		this.items.remove(pid);
+
+		// Remove the entry from the store (the GUI)
+		this.remove(item.iter);
+	}
+
 	
 	void closeAll () {
 		writefln("Application has %d items", this.items.length);
-		this.manager.closeSshConnections();
+		//this.manager.closeSshConnections();
 		
-//		foreach (Item item; this.items) {
-//			SshConnection connection = item.connection;
-//			writefln("quit >> Closing tunnel %s PID %d", connection, connection.pid);
+		foreach (Item item; this.items) {
+			SshConnection connection = item.connection;
+			writefln("quit >> Closing tunnel %s PID %d", connection, connection.pid);
+			this.discardSshConnection(item);
 //			connection.disconnect();
-//		}
+		}
 	}	
 }
 
@@ -270,6 +301,9 @@ class Application {
 	private const Menu menu;
 	
 	private const TunnelsListStore store;
+	
+	private const Timeout timeout;
+	
 	
 	/**
 	 * Track the visibility of the main window.
@@ -308,6 +342,8 @@ class Application {
 		this.store = new TunnelsListStore();
 		
 		this.finalizeWidgets();
+
+		this.timeout = new Timeout(1000, &onIdleWaitpid, true);
 	}
 
 
@@ -353,7 +389,7 @@ class Application {
 		
 		TreeIter iter = this.treeView.getSelectedIter();
 		if (iter !is null) {
-			this.store.closeTunnel(iter);
+			this.store.closeSshConnection(iter);
 		}
 		return true;
 	}	
@@ -529,6 +565,36 @@ class Application {
 		this.store.add(hop, targetAddresses);
 	}
 	
+
+	// Signal handler used to monitor the tunnel that die
+// FIXME enabling this creates some problems with the call to system in tunnel.doIpTableRule
+// replace by an idle event that will perform waitpid on the pids of the tunnels started
+//	signal(SIGCHLD, &monitorTunnelsSighandler);
+//	private gboolean onIdleWaitpid (void* data) {
+	private bool onIdleWaitpid () {
+
+		// Get as much PIDs as we can
+		while (true) {
+			
+			// Get the next PID available
+			int status;
+			pid_t pid = waitpid(-1, &status, WNOHANG);
+			if (pid < 1) {
+				// No more PIDs for the moment
+				writefln("no process to wait for");
+				return true;
+			}
+
+			// Close the tunnel
+			writefln("==> asking to close SSH tunnel for pid %d", pid);
+			this.store.closeSshConnection(pid);
+		}
+
+		writefln("running an idle event");
+		return true;
+	}
+
+
 	
 	/**
 	 * Gets the value of the given GtkEntry. The value will be striped of all
@@ -630,7 +696,7 @@ class Application {
  */
 int main (string [] args) {
 	Main.init(args);
-
+	
 	// Resolve the application's path
 	resolveResourcePath(args[0]);
 
@@ -643,8 +709,6 @@ int main (string [] args) {
 		signal(sig, &quitSighandler);
 	}
 	
-	// Signal handler used to monitor the tunnel that die
-	signal(SIGCHLD, &monitorTunnelsSighandler);
 
 	// Go into the main loop
 	Main.run();
@@ -670,9 +734,9 @@ void monitorTunnelsSighandler (int signal) {
 			// No more PIDs
 			break;
 		}
-		writefln("Caught end of PID %d", pid);
+
 		// Close the tunnel
-		APPLICATION.store.closeTunnel(pid);
+		APPLICATION.store.closeSshConnection(pid);
 	}
 		
 	return;
