@@ -83,8 +83,6 @@ private import gtk.CellRendererText;
 private import gtk.TreeIter;
 private import gtk.TreePath;
 
-private import gtk.Timeout;
-
 private import gdk.Keymap;
 private import gdk.Event;
 private import gdk.Rectangle;
@@ -302,8 +300,6 @@ class Application {
 	
 	private const TunnelsListStore store;
 	
-	private const Timeout timeout;
-	
 	
 	/**
 	 * Track the visibility of the main window.
@@ -342,8 +338,6 @@ class Application {
 		this.store = new TunnelsListStore();
 		
 		this.finalizeWidgets();
-
-		this.timeout = new Timeout(1000, &onIdleWaitpid, true);
 	}
 
 
@@ -571,28 +565,28 @@ class Application {
 // replace by an idle event that will perform waitpid on the pids of the tunnels started
 //	signal(SIGCHLD, &monitorTunnelsSighandler);
 //	private gboolean onIdleWaitpid (void* data) {
-	private bool onIdleWaitpid () {
-
-		// Get as much PIDs as we can
-		while (true) {
-			
-			// Get the next PID available
-			int status;
-			pid_t pid = waitpid(-1, &status, WNOHANG);
-			if (pid < 1) {
-				// No more PIDs for the moment
-				writefln("no process to wait for");
-				return true;
-			}
-
-			// Close the tunnel
-			writefln("==> asking to close SSH tunnel for pid %d", pid);
-			this.store.closeSshConnection(pid);
-		}
-
-		writefln("running an idle event");
-		return true;
-	}
+//	private bool onIdleWaitpid () {
+//
+//		// Get as much PIDs as we can
+//		while (true) {
+//			
+//			// Get the next PID available
+//			int status;
+//			pid_t pid = waitpid(-1, &status, WNOHANG);
+//			if (pid < 1) {
+//				// No more PIDs for the moment
+//				writefln("no process to wait for");
+//				return true;
+//			}
+//
+//			// Close the tunnel
+//			writefln("==> asking to close SSH tunnel for pid %d", pid);
+//			this.store.closeSshConnection(pid);
+//		}
+//
+//		writefln("running an idle event");
+//		return true;
+//	}
 
 
 	
