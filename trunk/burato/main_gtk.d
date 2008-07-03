@@ -349,7 +349,7 @@ class Application {
 		
 		// Toggle the visibility of the main window
 		this.statusIcon.addOnActivate(&onStatusIconClicked);
-		this.statusIcon.addOnPopupMenu(&onStatusIconShowPopopMenu);
+		this.statusIcon.addOnPopupMenu(&onStatusIconShowPopupMenu);
 		
 		// Track the visibility of the main window
 		this.window.addOnDelete(&onWindowDelete);
@@ -452,7 +452,7 @@ class Application {
 	/**
 	 * Callback called when the status icon has to show a popup menu.
 	 */
-	private void onStatusIconShowPopopMenu (guint button, guint time, StatusIcon widget) {
+	private void onStatusIconShowPopupMenu (guint button, guint time, StatusIcon widget) {
 		this.menu.popup(null, null, &menuPositionFunc, cast(void *) widget, button, time);
 	}
 	
@@ -492,6 +492,7 @@ class Application {
 			*y += gdkArea.height + 1;
 		}
 	}
+
 	
 	/**
 	 * Callback called when the close button on the main window is clicked. Here
