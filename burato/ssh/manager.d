@@ -45,12 +45,32 @@ private import burato.ssh.tunnel;
 private import burato.network;
 private import burato.signal: runUninterrupted;
 
-// FIXME relying on gtk.Timeout is too overkill (use glib.Timeout instead).
-private import gtk.Timeout;
+private import glib.Timeout;
 
 private const int WNOHANG = 1;
 
 public class SshManager {
+	
+	/**
+	 * Inner class used to pass arguments to a C callback.
+	 */
+	private class CallbackArgs {
+		/**
+		 * Instance that's will be invoked during the callback.
+		 */
+		//SshManager object;
+		bool delegate (gpointer arg) dg;
+		
+		/**
+		 * Arguments to pass to the callback.
+		 */
+		gpointer arg;
+		this (bool delegate (gpointer arg) dg, gpointer arg) {
+			this.dg = dg;
+			this.arg = arg;
+		}
+	};
+	
 	
 	/**
 	 * The SSH connections opened so far. Since each SSH connection is binded by a
@@ -65,9 +85,10 @@ public class SshManager {
 	int [] signals;
 	
 	/**
-	 * Timeout used to monitor the SSH processes.
+	 * ID of the timeout used to monitor the SSH processes. If there's no timeout
+	 * then 0 will be set as the value.
 	 */
-	private Timeout timeout = null;
+	private guint timeout = 0;
 	
 
 	/**
@@ -132,8 +153,9 @@ public class SshManager {
 		
 		
 		// Creates a periodic check that's used to monitor the SSH connections 
-		if (this.timeout is null) {
-			this.timeout = new Timeout(1000, &onTimeout, false);
+		if (! this.timeout) {
+			CallbackArgs args = new CallbackArgs(&this.onTimeout, null);
+			this.timeout = Timeout.addSeconds(1, cast(GSourceFunc) &onTimeoutCallback, cast(gpointer)args);
 		}
 
 		return connection;
@@ -213,13 +235,28 @@ public class SshManager {
 	
 	
 	/**
-	 * GTK timeout called to monitor the SSH processes.
+	 * This is the callback passed to glib when requesting a timeout. If we don't
+	 * pass and extern (C) function the program will crash. The problem is that
+	 * passing an extern (C) function is not too D-ish, thus this function acts as
+	 * bridge between a delegate and glib.
+	 *
+	 * The argument is expected to be an instance of CallbackArgs which
+	 * encapsulates a delegate and it's argument.
 	 */
-	private bool onTimeout () {
+	extern (C) private static gboolean onTimeoutCallback (gpointer data) {
+		CallbackArgs callbackArgs = cast(CallbackArgs) data;
+		return callbackArgs.dg(callbackArgs.arg);
+	}
+
+	
+	/**
+	 * Glib timeout called to monitor the SSH processes. The ideal would be to use
+	 * the signal CHLD, the problem is that this interferes with the function
+	 * "system". Using a glib timeout is not the best as it will wake up the
+	 * application on a periodic basis but it's the best that can be done.
+	 */
+	private bool onTimeout (gpointer data) {
 		
-		writefln("%s:%d > Idle timeout", __FILE__, __LINE__);
-
-
 		// Check the status of each process without blocking (this has to be quick)
 		foreach (pid_t pid, SshConnection connection; this.connections) {
 
@@ -252,17 +289,13 @@ public class SshManager {
 //
 // FIXME this method should provide a way to notify the holder of this instance
 //       that a tunnel has been closed. For instance the GUI needs to know this
-//       in order to remove the tunnel from it's data store
+//       in order to remove the tunnel from it's data store.
 //
 
 
 		// Disable the timeout if there's nothing more to monitor
 		if (this.connections.length == 0) {
-			writefln(
-				"%s:%d > Disabling the timeout, no more processes to watch",
-				__FILE__, __LINE__
-			);
-			this.timeout = null;
+			this.timeout = 0;
 			return false;
 		}
 		
