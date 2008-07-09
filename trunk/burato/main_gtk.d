@@ -175,7 +175,7 @@ private class TunnelsListStore : ListStore {
 
 	this () {
 		super(COLUMNS);
-		this.manager = new SshManager(SIGNALS);
+		this.manager = new SshManager(SIGNALS, &this.onSshConnectionClose);
 	}
 	
 	
@@ -243,6 +243,19 @@ private class TunnelsListStore : ListStore {
 				return;
 			}
 		}
+	}
+	
+	
+	/**
+	 * Callback called by the SshManager once a connection is closed. This usually
+	 * happens when an SSH process dies (and the GUI wasn't involved). In this
+	 * situation we simply remove the connection from the GUI.
+	 */
+	private void onSshConnectionClose (SshConnection connection) {
+		// Simply call the method that closes the SSH connection. Of course there's
+		// no need to close the connection since it's already closed but at least
+		// the connection will be removed from the GUI.
+		this.closeSshConnection(connection.pid);
 	}
 	
 
@@ -561,7 +574,7 @@ class Application {
 	}
 	
 
-	// Signal handler used to monitor the tunnel that die
+	// Signal handler used to monitor the tunnel that dies
 // FIXME enabling this creates some problems with the call to system in tunnel.doIpTableRule
 // replace by an idle event that will perform waitpid on the pids of the tunnels started
 //	signal(SIGCHLD, &monitorTunnelsSighandler);
