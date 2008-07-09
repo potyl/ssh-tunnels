@@ -59,17 +59,20 @@ public class SshManager {
 		 * Instance that's will be invoked during the callback.
 		 */
 		//SshManager object;
-		bool delegate (gpointer arg) dg;
+		bool delegate (gpointer) dg;
 		
 		/**
 		 * Arguments to pass to the callback.
 		 */
 		gpointer arg;
-		this (bool delegate (gpointer arg) dg, gpointer arg) {
+		this (bool delegate (gpointer) dg, gpointer arg) {
 			this.dg = dg;
 			this.arg = arg;
 		}
 	};
+	
+	
+	void delegate(SshConnection) [] onCloseCallbacks;
 	
 	
 	/**
@@ -97,9 +100,27 @@ public class SshManager {
 	 * A list of signals can be passed to this constructor. These signals will be
 	 * blocked while the tunnels are created and reaped. This is done to ensure
 	 * that the iptables rules are manipulated properly.
+	 *
+	 * A delegate can be passed to the constructor. When a tunnel is closed the
+	 * delegate will be called with the closed tunnel.
+	 */
+	public this (int [] signals, void delegate(SshConnection) onCloseCallback) {
+		this.signals = signals is null ? new int [0] : signals;
+		if (onCloseCallback !is null) {
+			this.onCloseCallbacks ~= onCloseCallback;
+		}
+	}
+	
+
+	/**
+	 * Creates a new instance.
+	 *
+	 * A list of signals can be passed to this constructor. These signals will be
+	 * blocked while the tunnels are created and reaped. This is done to ensure
+	 * that the iptables rules are manipulated properly.
 	 */
 	public this (int [] signals) {
-		this.signals = signals is null ? new int [0] : signals;
+		this(signals, null);
 	}
 
 
@@ -282,15 +303,16 @@ public class SshManager {
 				// Remove the SSH connection since the SSH process died
 				writefln("%s:%d > SSH process %d resumed", __FILE__, __LINE__, pid);
 				this.removeSshConnection(pid);
+
+
+
+				// Notify the callbacks that a tunnel has been closed.
+				foreach (int i, void delegate(SshConnection connection) callback; this.onCloseCallbacks) {
+					writefln("%s:%d > SSH process %d resumed, calling callback %d", __FILE__, __LINE__, pid, i);
+					callback(connection);
+				}
 			}
 		}
-
-
-//
-// FIXME this method should provide a way to notify the holder of this instance
-//       that a tunnel has been closed. For instance the GUI needs to know this
-//       in order to remove the tunnel from it's data store.
-//
 
 
 		// Disable the timeout if there's nothing more to monitor
