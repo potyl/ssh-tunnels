@@ -1,0 +1,17 @@
+ssh-tunnels (0.0.3-1) hardy; urgency=low
+
+  * The command line tool uses a single SSH process for the tunnels.
+
+ -- Emmanuel Rodriguez <emmanuel.rodriguez@gmail.com>  Thu, 10 Jul 2008 08:17:01 +0200
+
+ssh-tunnels (0.0.2-1) hardy; urgency=low
+
+  * Sync with the new version release.
+
+ -- Emmanuel Rodriguez <emmanuel.rodriguez@hp.com>  Thu, 01 May 2008 18:09:26 -0400
+
+ssh-tunnels (0.0.1-1) gutsy; urgency=low
+
+  * Initial release.
+
+ -- Emmanuel Rodriguez <emmanuel.rodriguez@gmail.com>  Mon, 14 Apr 2008 20:35:28 +0200
