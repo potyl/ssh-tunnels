@@ -1,3 +1,7 @@
+0.0.3
+	- Fixed Issue #1 - Allow multiple tunnels through a same ssh connection.
+	  NOTE: This is only fixed for the command line version.
+
 0.0.2
 	- Fixed Issue #2 - Allow the user to cancel tunnels through the GUI.
 
