@@ -28,7 +28,7 @@ Host maroochydore
 	User cas
 	Port = 8888
 
-Host = brisbane.time.flexi4site.net
+host = brisbane.time.flexi4site.net
 	ForwardAgent yes
 	ForwardX11 yes
 	HostName brisbane.time.flexi4site.net
@@ -58,7 +58,7 @@ Host=debian
 	ForwardX11 yes
 	HostName ntp1v6.theremailer.net
 	User root
-	Port= 1243
+	port= 1243
 
    Host   "winona"
 	ForwardAgent yes
