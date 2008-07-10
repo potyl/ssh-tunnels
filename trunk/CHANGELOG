@@ -1,3 +1,6 @@
+0.0.4
+	- Fixed Issue 5 - Parsing of the SSH configuration files is wrong.
+
 0.0.3
 	- Fixed Issue #1 - Allow multiple tunnels through a same ssh connection.
 	  NOTE: This is only fixed for the command line version.
