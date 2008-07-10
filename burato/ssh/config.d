@@ -86,6 +86,15 @@ public NetworkAddress getNetworkAddress(string host, string [string] directives,
 		string [string] hash;
 		directives = hash;
 	}
+	else {
+		string [string] copy;
+		// Make sure that all keys are in lowercase
+		foreach (string key, string value; directives) {
+			string lower = tolower(key);
+			directives[lower] = key;
+		}
+		directives = copy;
+	}
 
 
 	// Parse the configuration files
@@ -97,7 +106,7 @@ public NetworkAddress getNetworkAddress(string host, string [string] directives,
 			auto directive = config.nextDirective();
 	
 			// Look until we match the "Host" directive for the given host
-			if (directive.matches("Host", host)) {
+			if (directive.matches("host", host)) {
 				
 				// Get the section's directives
 				directives = config.loadSectionDirectives(directives); 
@@ -107,8 +116,8 @@ public NetworkAddress getNetworkAddress(string host, string [string] directives,
 
 
 	// Extract the hostname and the port from the directives
-	string hostname = getDirectiveValue(directives, "HostName", host);
-	string portString = getDirectiveValue(directives, "Port", toString(SSH_DEFAULT_PORT));
+	string hostname = getDirectiveValue(directives, "hostname", host);
+	string portString = getDirectiveValue(directives, "port", toString(SSH_DEFAULT_PORT));
 	ushort port = atoi(portString);
 			
 	NetworkAddress address = new NetworkAddress(hostname, port);
@@ -246,7 +255,7 @@ private class ConfigurationFile {
 			auto directive = this.nextDirective();
 				
 			// Make sure that we don't spawn over another host section
-			if (directive.matches("Host")) {
+			if (directive.matches("host")) {
 				// Make sure to remember this directive, in order to resume the loading
 				// at the previous place
 				this.directive = directive;
@@ -356,6 +365,7 @@ private ConfigurationDirective getConfigurationDirective (string text) {
 		}
 	}
 	string keyword = text[start .. end];
+	keyword = tolower(keyword);
 
 	// If an equal sign is used then move the end position of one (after the '=')
 	if (equal) {
