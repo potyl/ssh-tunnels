@@ -63,6 +63,12 @@ int main (string [] args) {
  * Custom XML parser.
  */
 class MyXMLParser : XMLParser {
+
+	this () {
+		writefln("1)Method %x", cast(void *)&onStartElement);
+		writefln("2)Method %x", cast(void *)&XMLParser.onStartElement);
+		writefln("#)Method %x", cast(void *)&MyXMLParser.onStartElement);
+	}
 	
 	void onStartElement (string name, string [string] attributes) {
 		writefln("<%s>", name);
@@ -75,10 +81,6 @@ class MyXMLParser : XMLParser {
 
 	void onText (string text) {
 		writefln("\tText: %s", text);
-	}
-
-	void onPassthrough (string text) {
-		writefln("\tPassthrough: %s", text);
 	}
 }
 
@@ -100,13 +102,20 @@ class MyXMLParser : XMLParser {
  * This class gives a more object oriented interface to SimpleXML, futhermore it
  * also makes the methods look more 'D' as it uses 'D' types for the method
  * arguments.
- *
- * As a drawback the SimpleXML instance as all callbacks registered, even if the
- * derived class doesn't overload them all.
  */
 class XMLParser {
 
+
+	/**
+	 * The SimpleXML instance being used.
+	 */
 	private SimpleXML simpleXML;
+
+	
+	/**
+	 * The methods that the parser should be using.
+	 */
+	private GMarkupParser parser;
 	
 	
 	/**
@@ -115,13 +124,27 @@ class XMLParser {
 	 * Parsing is done through the method parse(xml).
 	 */
 	this () {
-		static GMarkupParser parser = {
-			error: &callbackError,
-			startElement: &callbackStartElement,
-			endElement: &callbackEndElement,
-			text: &callbackText,
-			passthrough: &callbackPassthrough,
-		};
+
+		// Register only the callbacks that have been overridden
+		if (&this.onError !is &XMLParser.onError) {
+			parser.error = &callbackError;
+		}
+
+		if (&this.onStartElement !is &XMLParser.onStartElement) {
+			parser.startElement = &callbackStartElement;
+		}
+
+		if (&this.onEndElement !is &XMLParser.onEndElement) {
+			parser.endElement = &callbackEndElement;
+		}
+
+		if (&this.onText !is &XMLParser.onText) {
+			parser.text = &callbackText;
+		}
+
+		if (&this.onPassthrough !is &XMLParser.onPassthrough) {
+			parser.passthrough = &callbackPassthrough;
+		}
 
 		this.simpleXML = new SimpleXML(
 			cast(GMarkupParser *) &parser, 
@@ -133,7 +156,7 @@ class XMLParser {
 
 	
 	/**
-	 *
+	 * Callback that will forward all 'error' events to the handler onError.
 	 */
 	private static void callbackError (GMarkupParseContext *context, GError *error, gpointer userData) {
 		XMLParser that = cast(XMLParser) userData;
@@ -141,6 +164,9 @@ class XMLParser {
 	}
 
 	
+	/**
+	 * Callback that will forward all 'start element' events to the handler onStartElement.
+	 */
 	private static void callbackStartElement (
 		GMarkupParseContext *context,
 		gchar *elementName,
@@ -162,12 +188,15 @@ class XMLParser {
 
 		string element = Str.toString(elementName);
 
-		// Invoke the callback
+		// Invoke the handler
 		XMLParser that = cast(XMLParser) userData;
 		that.onStartElement(element, attributes);
 	}
 
-
+	
+	/**
+	 * Callback that will forward all 'end element' events to the handler onEndElement.
+	 */
 	private static void callbackEndElement (
 		GMarkupParseContext *context,
 		gchar *elementName,
@@ -176,12 +205,15 @@ class XMLParser {
 	) {
 		string name = Str.toString(elementName);
 
-		// Invoke the callback
+		// Invoke the handler
 		XMLParser that = cast(XMLParser) userData;
 		that.onEndElement(name);
 	}
 
 
+	/**
+	 * Callback that will forward all 'text' events to the handler onText.
+	 */
 	private static void callbackText (
 		GMarkupParseContext *context,
 		gchar *text,
@@ -192,12 +224,15 @@ class XMLParser {
 		
 		string buffer = toString(text, textLen);
 		
-		// Invoke the callback
+		// Invoke the handler
 		XMLParser that = cast(XMLParser) userData;
 		that.onText(buffer);
 	}
 
 
+	/**
+	 * Callback that will forward all 'passthrough' events to the handler onPassthrough.
+	 */
 	private static void callbackPassthrough (
 		GMarkupParseContext *context,
 		gchar *passthroughText,
@@ -206,14 +241,18 @@ class XMLParser {
 		GError **error
 	)
 	{
-		string buffer = toString	(passthroughText, textLen);
+		string buffer = toString (passthroughText, textLen);
 		
-		// Invoke the callback
+		// Invoke the handler
 		XMLParser that = cast(XMLParser) userData;
 		that.onPassthrough(buffer);
 	}
 
 
+	/**
+	 * Transforms a generic C string that's not necessarily null terminated into a
+	 * D string.
+	 */
 	private static string toString (gchar *text, gsize textLen) {
 		
 		// Transform the C string into a D string
@@ -227,10 +266,35 @@ class XMLParser {
 	}
 
 
+	/**
+	 * Called on error, including one set by other handlers.
+	 */
 	void onError () {}
+
+
+	/**
+	 * Called for open tags <foo bar="baz">.
+	 */
 	void onStartElement (string name, string [string] attributes) {}
+
+
+	/**
+	 * Called for close tags </foo>.
+	 */
 	void onEndElement (string name) {}
+
+
+	/**
+	 * Called for character data.
+	 */
 	void onText (string text) {}
+
+
+	/**
+	 * Called for strings that should be re-saved verbatim in this same position,
+	 * but are not otherwise interpretable. At the moment this includes comments
+	 * and processing instructions.
+	 */
 	void onPassthrough (string text) {}
 
 
