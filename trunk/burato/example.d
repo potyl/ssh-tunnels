@@ -41,7 +41,7 @@ private import glib.Str;
 int main (string [] args) {
 	writefln("Test");
 	
-	if (args.length < 1) {
+	if (args.length < 2) {
 		writefln("Usage: xml");
 		return 1;
 	}
