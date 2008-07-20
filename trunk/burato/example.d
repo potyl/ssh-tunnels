@@ -33,8 +33,17 @@ private import glib.KeyFile;
 private import glib.SimpleXML;
 private import glib.Str;
 
+
+private import burato.ssh.manager;
+private import burato.ssh.connection;
 private import burato.network;
+
 private import std.c.process: exit;
+private import std.c.linux.linux:
+	SIGINT,
+	SIGTERM,
+	SIGQUIT
+;
 
 /**
  * Main entry point of the program.
@@ -46,19 +55,21 @@ int main (string [] args) {
 		writefln("Usage: xml");
 		return 1;
 	}
-
 	string text = cast(char[]) std.file.read(args[1]);
 
-	XMLParser parser = new MyXMLParser();
-	try {
-		parser.parse(text);
-	}
-	catch (Error error) {
-		writefln("Got error: %s", error);
-	}
-	catch (Exception exception) {
-		writefln("Got exception: %s", exception);
-	}
+
+	const int [] signals = [
+		SIGINT,
+		SIGTERM,
+		SIGQUIT,
+	];
+	SshManager manager = new SshManager(signals);
+
+
+	XMLParser parser = new MyXMLParser(manager);
+	parser.parse(text);
+
+	manager.waitForTunnelsToDie();
 
 	writefln("Ok");
 	return 0;
@@ -70,26 +81,17 @@ int main (string [] args) {
  */
 class MyXMLParser : XMLParser {
 
+	SshManager manager;
 	string hop = null;
 	NetworkAddress [] addresses;
 	
-	private static string getAttributeValue (string [string] attributes, string name) {
-		string *pointer;
-		pointer = (name in attributes);
-		if (pointer is null) {
-			return null;
-		}
-		
-		return *pointer;
+	this (SshManager manager) {
+		this.manager = manager;
 	}
 
 	
 	void onStartElement (string name, string [string] attributes) {
-
-
-writefln("Parsing %s", name);
-	try {
-
+try {
 		switch (name) {
 
 			// Used to check if the attributes have a given key
@@ -98,15 +100,12 @@ writefln("Parsing %s", name);
 			case "connection":
 			{
 				// Starting a new connection
-//				hop = attributes["target"];
+				this.addresses = this.addresses.init;
+				this.hop = null;
+
 				pointer = ("target" in attributes);
-				if (pointer is null) {
-					// Incomplete tunnel entry
-					return;
-				}
-				hop = *pointer;
-				
-//				hop = getAttributeValue(attributes, "target");
+				if (pointer is null) {return;}
+				this.hop = *pointer;
 			}
 			break;
 			
@@ -119,43 +118,42 @@ writefln("Parsing %s", name);
 				string host = *pointer;
 
 				pointer = ("port" in attributes);
-				if (pointer is null) {
-					// Incomplete tunnel entry
-					return;
-				}
+				if (pointer is null) {return;}
 				ushort port = cast(ushort) atoi(*pointer);
 				
 
-				addresses.length = addresses.length + 1;
-				addresses[addresses.length - 1] = new NetworkAddress(host, port);
+				this.addresses.length = this.addresses.length + 1;
+				this.addresses[length - 1] = new NetworkAddress(host, port);
 			}
 			break;
 			
 			
 			default:
-				// Other elements not handled
+				// Other elements are not handled
 			break;
 		}
-	}
-	catch (Error error) {
-		writefln("Got error: %s", error);
-		exit(1);
-	}
-	catch (Exception exception) {
-		writefln("Got exception: %s", exception);
-		exit(1);
-	}
-writefln("Parsed %s", name);
+
+}
+catch (Exception exception) {
+	writefln("1 >> FAILED: %s", exception);
+}
+
 	}
 
 
 	void onEndElement (string name) {
+		
 		if (name == "connection") {
-			// Closing a connection, create the proper SSH connection
-			writefln("SSH connection through %s hop", hop);
-			
-			foreach (NetworkAddress address; addresses) {
-				writefln("\tunnel to %s", address);
+
+			// Create a new SSh connection with the given tunnels
+			if (this.hop is null) {return;}
+			if (this.addresses.length < 1) {return;}
+
+			try {
+				this.manager.createSshConnection(this.hop, this.addresses);
+			}
+			catch (Exception exception) {
+				writefln("2 >> FAILED: %s", exception);
 			}
 		}
 	}
