@@ -33,7 +33,8 @@ private import glib.KeyFile;
 private import glib.SimpleXML;
 private import glib.Str;
 
-//private import std.c.stdlib;
+private import burato.network;
+private import std.c.process: exit;
 
 /**
  * Main entry point of the program.
@@ -48,11 +49,16 @@ int main (string [] args) {
 
 	string text = cast(char[]) std.file.read(args[1]);
 
-
-	//string text = "<save><connection target='festival'><tunnel target='irc.perl.org' port='6667'/></connection></save>";
-
 	XMLParser parser = new MyXMLParser();
-	parser.parse(text);
+	try {
+		parser.parse(text);
+	}
+	catch (Error error) {
+		writefln("Got error: %s", error);
+	}
+	catch (Exception exception) {
+		writefln("Got exception: %s", exception);
+	}
 
 	writefln("Ok");
 	return 0;
@@ -64,23 +70,94 @@ int main (string [] args) {
  */
 class MyXMLParser : XMLParser {
 
-	this () {
-		writefln("1)Method %x", cast(void *)&onStartElement);
-		writefln("2)Method %x", cast(void *)&XMLParser.onStartElement);
-		writefln("#)Method %x", cast(void *)&MyXMLParser.onStartElement);
+	string hop = null;
+	NetworkAddress [] addresses;
+	
+	private static string getAttributeValue (string [string] attributes, string name) {
+		string *pointer;
+		pointer = (name in attributes);
+		if (pointer is null) {
+			return null;
+		}
+		
+		return *pointer;
 	}
+
 	
 	void onStartElement (string name, string [string] attributes) {
-		writefln("<%s>", name);
-		writefln("\tAttributes: %s", attributes);
+
+
+writefln("Parsing %s", name);
+	try {
+
+		switch (name) {
+
+			// Used to check if the attributes have a given key
+			string *pointer;
+
+			case "connection":
+			{
+				// Starting a new connection
+//				hop = attributes["target"];
+				pointer = ("target" in attributes);
+				if (pointer is null) {
+					// Incomplete tunnel entry
+					return;
+				}
+				hop = *pointer;
+				
+//				hop = getAttributeValue(attributes, "target");
+			}
+			break;
+			
+
+			case "tunnel":
+			{
+				// Adding a tunnel to the current connection
+				pointer = ("target" in attributes);
+				if (pointer is null) {return;}
+				string host = *pointer;
+
+				pointer = ("port" in attributes);
+				if (pointer is null) {
+					// Incomplete tunnel entry
+					return;
+				}
+				ushort port = cast(ushort) atoi(*pointer);
+				
+
+				addresses.length = addresses.length + 1;
+				addresses[addresses.length - 1] = new NetworkAddress(host, port);
+			}
+			break;
+			
+			
+			default:
+				// Other elements not handled
+			break;
+		}
 	}
+	catch (Error error) {
+		writefln("Got error: %s", error);
+		exit(1);
+	}
+	catch (Exception exception) {
+		writefln("Got exception: %s", exception);
+		exit(1);
+	}
+writefln("Parsed %s", name);
+	}
+
 
 	void onEndElement (string name) {
-		writefln("</%s>", name);
-	}
-
-	void onText (string text) {
-		writefln("\tText: %s", text);
+		if (name == "connection") {
+			// Closing a connection, create the proper SSH connection
+			writefln("SSH connection through %s hop", hop);
+			
+			foreach (NetworkAddress address; addresses) {
+				writefln("\tunnel to %s", address);
+			}
+		}
 	}
 }
 
