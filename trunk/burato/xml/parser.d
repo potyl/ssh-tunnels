@@ -42,7 +42,7 @@ private import glib.Str;
  *  onStartElement - called when an element is started
  *  onEndElement - called when an element is ended
  *  onText - called when text is being processed
- *  onPassthrough - called when non text data (PI, comments) is bein processed
+ *  onPassthrough - called when non text data (PI, comments) is being processed
  *  
  * The method parse(xml) can be used to parse an XML string.
  *
