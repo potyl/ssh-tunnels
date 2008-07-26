@@ -73,6 +73,7 @@ public class SshManager {
 	
 	
 	void delegate(SshConnection) [] onCloseCallbacks;
+	void delegate(SshConnection) [] onCreateCallbacks;
 	
 	
 	/**
@@ -100,29 +101,37 @@ public class SshManager {
 	 * A list of signals can be passed to this constructor. These signals will be
 	 * blocked while the tunnels are created and reaped. This is done to ensure
 	 * that the iptables rules are manipulated properly.
-	 *
-	 * A delegate can be passed to the constructor. When a tunnel is closed the
-	 * delegate will be called with the closed tunnel.
 	 */
-	public this (int [] signals, void delegate(SshConnection) onCloseCallback) {
+	public this (int [] signals) {
 		this.signals = signals is null ? new int [0] : signals;
-		if (onCloseCallback !is null) {
-			this.onCloseCallbacks ~= onCloseCallback;
+	}
+	
+	
+	/**
+	 * Registers a callback that will be invoked each time that an SSH connection
+	 * is created.
+	 *
+	 * The callback will received as parameters the SshConnection that was
+	 * created.
+	 */
+	public void addOnCreateCallback (void delegate(SshConnection) callback) {
+		if (callback !is null) {
+			this.onCreateCallbacks ~= callback;
 		}
 	}
 	
-
+	
 	/**
-	 * Creates a new instance.
+	 * Registers a callback that will be invoked each time that an SSH connection
+	 * is closed.
 	 *
-	 * A list of signals can be passed to this constructor. These signals will be
-	 * blocked while the tunnels are created and reaped. This is done to ensure
-	 * that the iptables rules are manipulated properly.
+	 * The callback will received as parameters the SshConnection being closed.
 	 */
-	public this (int [] signals) {
-		this(signals, null);
+	public void addOnCloseCallback (void delegate(SshConnection) callback) {
+		if (callback !is null) {
+			this.onCloseCallbacks ~= callback;
+		}
 	}
-
 
 
 	/**
@@ -171,12 +180,21 @@ public class SshManager {
 			connection.pid,
 			connection.tunnels.length
 		);
-		
+
+		// Notify the callbacks that a tunnel has been created.
+		foreach (int i, void delegate(SshConnection connection) callback; this.onCreateCallbacks) {
+			writefln("%s:%d > SSH process %d created, calling callback %d", __FILE__, __LINE__, connection.pid, i);
+			callback(connection);
+		}
 		
 		// Creates a periodic check that's used to monitor the SSH connections 
 		if (! this.timeout) {
 			CallbackArgs args = new CallbackArgs(&this.onTimeout, null);
-			this.timeout = Timeout.addSeconds(1, cast(GSourceFunc) &onTimeoutCallback, cast(gpointer)args);
+			this.timeout = Timeout.addSeconds(
+				1, 
+				cast(GSourceFunc) &onTimeoutCallback, 
+				cast(gpointer)args
+			);
 		}
 
 		return connection;
