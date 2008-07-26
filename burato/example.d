@@ -29,6 +29,11 @@ private import std.stdio;
 
 private import burato.ssh.manager;
 private import burato.save.tunnels;
+private import glib.Util;
+private import glib.Str;
+private import gtkc.glib: g_malloc, g_free;
+private import std.stdarg;
+private import glib.FileUtils;
 
 private import std.c.linux.linux:
 	SIGINT,
@@ -36,28 +41,34 @@ private import std.c.linux.linux:
 	SIGQUIT
 ;
 
+
 /**
  * Main entry point of the program.
  */
 int main (string [] args) {
 	writefln("Test");
-	
-	if (args.length < 2) {
-		writefln("Usage: xml");
-		return 1;
-	}
-	string file = args[1];
-	
-	
+
 	const int [] signals = [
 		SIGINT,
 		SIGTERM,
 		SIGQUIT,
 	];
 	SshManager manager = new SshManager(signals);
+	writefln("Executing '%s'", Util.getPrgname());
 
-	loadSshTunnels(manager, file);
+	string saveFile = Util.buildFilename(
+		Util.getUserConfigDir(),
+		"ssh-tunnels",
+		"save.xml"
+	);
+	writefln("saveFile is %s", saveFile);
 
+	if (! FileUtils.fileTest(saveFile, GFileTest.EXISTS | GFileTest.IS_REGULAR)) {
+		writefln("File doesn't exist");
+		return 1;
+	}
+	
+	loadSshTunnels(manager, saveFile);
 	manager.waitForTunnelsToDie();
 
 	writefln("Ok");
