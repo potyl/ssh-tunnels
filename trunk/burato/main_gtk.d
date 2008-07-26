@@ -90,6 +90,8 @@ private import gobject.Value;
 
 private import glade.Glade;
 
+private import glib.Util;
+private import glib.FileUtils;
 
 private import burato.signal: 
 	signal,
@@ -100,6 +102,7 @@ private import burato.ssh.manager;
 private import burato.ssh.connection;
 private import burato.ssh.tunnel;
 private import burato.network;
+private import burato.save.tunnels;
 
 
 /**
@@ -175,7 +178,9 @@ private class TunnelsListStore : ListStore {
 
 	this () {
 		super(COLUMNS);
-		this.manager = new SshManager(SIGNALS, &this.onSshConnectionClose);
+		this.manager = new SshManager(SIGNALS);
+		this.manager.addOnCloseCallback(&this.onSshConnectionClose);
+		this.manager.addOnCreateCallback(&this.onSshConnectionCreate);
 	}
 	
 	
@@ -183,30 +188,7 @@ private class TunnelsListStore : ListStore {
 	 * Creates an SSH connection and adds it to the store.
 	 */
 	void add (string hop, NetworkAddress [] targetAddresses) {
-	
-		SshConnection connection = this.manager.createSshConnection(hop, targetAddresses);
-		Item item = new Item(connection, this.createIter());
-
-		int pos = 0;
-		this.setValue(item.iter, pos++, connection.hop);
-		// FIXME For the moment the main GUI can create only one tunnel per SSH
-		//       connection. This is because in the past the application could only
-		//       handle one tunnel per connection. Now the framework allows the
-		//       tunneling of multiple ports through one SSH connection.
-		SshTunnel tunnel = connection.tunnels[0];
-
-		this.setValue(item.iter, pos++, tunnel.target.port);
-		this.setValue(item.iter, pos++, tunnel.target.host);
-
-		{
-			Value value = new Value();
-			value.init(GType.POINTER);
-			value.setPointer(cast(void*) tunnel);
-
-			this.setValue(item.iter, pos++, value);
-		}
-
-		this.items[connection.pid] = item;
+		this.manager.createSshConnection(hop, targetAddresses);
 	}
 	
 	
@@ -256,6 +238,36 @@ private class TunnelsListStore : ListStore {
 		// no need to close the connection since it's already closed but at least
 		// the connection will be removed from the GUI.
 		this.closeSshConnection(connection.pid);
+	}
+	
+	
+	/**
+	 * Callback called by the SshManager once a connection is created. This is
+	 * more of a confirmation that the actual SSH connection is made.
+	 */
+	private void onSshConnectionCreate (SshConnection connection) {
+		Item item = new Item(connection, this.createIter());
+
+		int pos = 0;
+		this.setValue(item.iter, pos++, connection.hop);
+		// FIXME For the moment the main GUI can create only one tunnel per SSH
+		//       connection. This is because in the past the application could only
+		//       handle one tunnel per connection. Now the framework allows the
+		//       tunneling of multiple ports through one SSH connection.
+		SshTunnel tunnel = connection.tunnels[0];
+
+		this.setValue(item.iter, pos++, tunnel.target.port);
+		this.setValue(item.iter, pos++, tunnel.target.host);
+
+		{
+			Value value = new Value();
+			value.init(GType.POINTER);
+			value.setPointer(cast(void*) tunnel);
+
+			this.setValue(item.iter, pos++, value);
+		}
+
+		this.items[connection.pid] = item;
 	}
 	
 
@@ -696,6 +708,16 @@ class Application {
 		writefln("Calling Main.quit()");
 		Main.quit();
 	}
+	
+	
+	/**
+	 * Loads a save file and creates the SSH connections registered there.
+	 */
+	void loadSaveFile(string saveFile) {
+		writefln("Loading save file %s", saveFile);
+		loadSshTunnels(this.store.manager, saveFile);
+	}
+	
 }
 
 
@@ -711,6 +733,21 @@ int main (string [] args) {
 	// Create the application
 	string gladeFile = getResourcePath("ssh-tunnels.glade");
 	APPLICATION = new Application(gladeFile);
+
+
+	// Load the previous configuration file
+	string saveFile = Util.buildFilename(
+		Util.getUserConfigDir(),
+		"ssh-tunnels",
+		"save.xml"
+	);
+	writefln("saveFile is %s", saveFile);
+
+	if (FileUtils.fileTest(saveFile, GFileTest.EXISTS | GFileTest.IS_REGULAR)) {
+		APPLICATION.loadSaveFile(saveFile);
+	}
+
+
 
 	// Register our own signal handler in order to catch all CTRL-C
 	foreach (int sig; SIGNALS) {
