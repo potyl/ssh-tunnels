@@ -1,5 +1,5 @@
 /*
- * main_cli.d
+ * main/cli.d
  *
  * Copyright (C) 2008 Emmanuel Rodriguez
  * 
@@ -18,7 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-module burato.main_cli;
+module burato.main.cli;
 
 /**
  * This module provides a command line program that can be used to start new SSH
