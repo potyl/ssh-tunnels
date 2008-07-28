@@ -1,5 +1,5 @@
 /*
- * main_gtk.d
+ * main/gtk/gtk.d
  *
  * Copyright (C) 2008 Emmanuel Rodriguez
  * 
@@ -18,7 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-module burato.man_gtk;
+module burato.main.gtk.gtk;
 
 /**
  * This module provides a program with a graphical frontend that can be used to
