@@ -1,3 +1,9 @@
+ssh-tunnels (0.0.4-1) hardy; urgency=low
+
+  * The GUI is able to create tunnels at startup from a save file.
+
+ -- Emmanuel Rodriguez <emmanuel.rodriguez@gmail.com>  Mon, 28 Jul 2008 07:38:36 +0200
+
 ssh-tunnels (0.0.3-1) hardy; urgency=low
 
   * The command line tool uses a single SSH process for the tunnels.
