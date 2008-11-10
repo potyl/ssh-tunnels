@@ -101,6 +101,7 @@ private import burato.ssh.connection;
 private import burato.ssh.tunnel;
 private import burato.network;
 private import burato.main.gtk.store;
+private import burato.save.tunnels;
 
 
 /**
@@ -275,6 +276,7 @@ class Application {
 	 */
 	private void onDialogResponse (int response, Dialog dialog) {
 		if (response == GtkResponseType.GTK_RESPONSE_CANCEL) {
+			// FIXME hideOnDelete is a callback not a function that should be called
 			dialog.hideOnDelete();
 		}
 	}
@@ -285,6 +287,7 @@ class Application {
 	 * want hide the dialog since Glade will not recreate it.
 	 */
 	private void onDialogClose (Dialog dialog) {
+			// FIXME hideOnDelete is a callback not a function that should be called
 		dialog.hideOnDelete();
 	}
 
@@ -295,6 +298,7 @@ class Application {
 	 */
 	private void onStatusIconClicked (StatusIcon widget) {
 		if (this.mainWindowVisible) {
+			// FIXME hideOnDelete is a callback not a function that should be called
 			this.window.hideOnDelete();
 		}
 		else {
