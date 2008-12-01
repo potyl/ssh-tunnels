@@ -105,7 +105,7 @@ public class XMLParser {
 	/**
 	 * Callback that will forward all 'error' events to the handler onError.
 	 */
-	private static void callbackError (GMarkupParseContext *context, GError *error, gpointer userData) {
+	extern (C) private static void callbackError (GMarkupParseContext *context, GError *error, gpointer userData) {
 		XMLParser that = cast(XMLParser) userData;
 		that.onError();
 	}
@@ -114,7 +114,7 @@ public class XMLParser {
 	/**
 	 * Callback that will forward all 'start element' events to the handler onStartElement.
 	 */
-	private static void callbackStartElement (
+	extern (C) private static void callbackStartElement (
 		GMarkupParseContext *context,
 		gchar *elementName,
 		gchar **attributeNames,
@@ -144,7 +144,7 @@ public class XMLParser {
 	/**
 	 * Callback that will forward all 'end element' events to the handler onEndElement.
 	 */
-	private static void callbackEndElement (
+	extern (C) private static void callbackEndElement (
 		GMarkupParseContext *context,
 		gchar *elementName,
 		gpointer userData,
@@ -161,7 +161,7 @@ public class XMLParser {
 	/**
 	 * Callback that will forward all 'text' events to the handler onText.
 	 */
-	private static void callbackText (
+	extern (C) private static void callbackText (
 		GMarkupParseContext *context,
 		gchar *text,
 		gsize textLen,
@@ -180,7 +180,7 @@ public class XMLParser {
 	/**
 	 * Callback that will forward all 'passthrough' events to the handler onPassthrough.
 	 */
-	private static void callbackPassthrough (
+	extern (C) private static void callbackPassthrough (
 		GMarkupParseContext *context,
 		gchar *passthroughText,
 		gsize textLen,
@@ -250,7 +250,6 @@ public class XMLParser {
 	 * Parses an XML document loaded into a string.
 	 */
 	public void parse (string xml) {
-		GError *error;
-		this.simpleXML.parse(xml , xml.length, &error);
+		this.simpleXML.parse(xml , xml.length);
 	}
 }
