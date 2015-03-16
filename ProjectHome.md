@@ -1,0 +1,3 @@
+This program provides a graphical front-end for creating SSH tunnels that are backed by a corresponding Iptables rule thus creating the illusion that the remote target being tunneled is accessible directly. All traffic to the target is automatically redirected through the tunnel thanks to the corresponding Iptables rule.
+
+This software is ideal when firewall rules forbid a client to reach different targets. This program will ease the task of creating SSH tunnels and to assign them a corresponding Iptable rule.
